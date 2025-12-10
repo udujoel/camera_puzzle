@@ -1,4 +1,4 @@
-import { Component, signal, ChangeDetectionStrategy, ViewChild, ElementRef, OnDestroy, WritableSignal } from '@angular/core';
+import { Component, signal, ChangeDetectionStrategy, ViewChild, ElementRef, OnDestroy, WritableSignal, computed } from '@angular/core';
 
 const GRID_SIZE = 3;
 const PUZZLE_DIMENSION = 600; // Should be easily divisible by GRID_SIZE
@@ -10,6 +10,15 @@ interface AnimationState {
   duration: number;
 }
 
+interface ConfettiParticle {
+  left: string;
+  background: string;
+  width: string;
+  height: string;
+  animationDuration: string;
+  animationDelay: string;
+}
+
 @Component({
   selector: 'app-root',
   templateUrl: './app.component.html',
@@ -18,19 +27,39 @@ interface AnimationState {
 export class AppComponent implements OnDestroy {
   @ViewChild('videoElement') videoElement!: ElementRef<HTMLVideoElement>;
   @ViewChild('puzzleCanvas') puzzleCanvas?: ElementRef<HTMLCanvasElement>;
+  @ViewChild('previewCanvas') previewCanvas?: ElementRef<HTMLCanvasElement>;
 
   gameState: WritableSignal<'idle' | 'playing' | 'won' | 'error'> = signal('idle');
   cameraError: WritableSignal<string | null> = signal(null);
   tiles: WritableSignal<number[]> = signal([]);
   selectedTileIndex: WritableSignal<number | null> = signal(null);
   isShuffling = signal(false);
+  moveCount = signal(0);
+  timeTaken = signal(0); // in milliseconds
+  confettiParticles = signal<ConfettiParticle[]>([]);
 
   private stream: MediaStream | null = null;
   private animationFrameId: number | null = null;
   private currentAnimation: AnimationState | null = null;
+  private startTime = 0;
   
-  // Make PUZZLE_DIMENSION available to the template
   public readonly PUZZLE_DIMENSION = PUZZLE_DIMENSION;
+
+  formattedTime = computed(() => {
+    const totalSeconds = Math.floor(this.timeTaken() / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+
+    const parts = [];
+    if (minutes > 0) {
+      parts.push(`${minutes} minute${minutes > 1 ? 's' : ''}`);
+    }
+    if (seconds > 0 || minutes === 0) {
+        parts.push(`${seconds} second${seconds !== 1 ? 's' : ''}`);
+    }
+    
+    return parts.join(' and ');
+  });
 
   constructor() {
     const initialTiles = Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, i) => i);
@@ -57,10 +86,18 @@ export class AppComponent implements OnDestroy {
 
   private initializePuzzle(): void {
     const canvas = this.puzzleCanvas?.nativeElement;
+    const previewCanvas = this.previewCanvas?.nativeElement;
     if (canvas) {
       canvas.width = PUZZLE_DIMENSION;
       canvas.height = PUZZLE_DIMENSION;
     }
+    if (previewCanvas) {
+        previewCanvas.width = 120;
+        previewCanvas.height = 120;
+    }
+    this.moveCount.set(0);
+    this.timeTaken.set(0);
+    this.startTime = performance.now();
     this.shuffleTiles();
     this.gameLoop();
   }
@@ -85,6 +122,7 @@ export class AppComponent implements OnDestroy {
     this.stopGame();
     this.selectedTileIndex.set(null);
     this.cameraError.set(null);
+    this.confettiParticles.set([]);
     this.gameState.set('idle');
   }
 
@@ -98,6 +136,12 @@ export class AppComponent implements OnDestroy {
     const initialTiles = Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, i) => i);
     this.tiles.set(initialTiles);
     this.isShuffling.set(false);
+    
+    // Clear preview canvas
+    if(this.previewCanvas) {
+        const previewCtx = this.previewCanvas.nativeElement.getContext('2d');
+        previewCtx?.clearRect(0, 0, this.previewCanvas.nativeElement.width, this.previewCanvas.nativeElement.height);
+    }
   }
   
   private async shuffleTiles(): Promise<void> {
@@ -165,6 +209,7 @@ export class AppComponent implements OnDestroy {
       this.selectedTileIndex.set(clickedIndex);
     } else {
       if (selectedIdx !== clickedIndex) {
+        this.moveCount.update(c => c + 1);
         this.swapTiles(selectedIdx, clickedIndex, 200);
       }
       this.selectedTileIndex.set(null);
@@ -177,6 +222,9 @@ export class AppComponent implements OnDestroy {
 
   private gameLoop = (): void => {
     this.drawScrambledVideo();
+    if(this.gameState() === 'playing') {
+      this.drawPreview();
+    }
     this.animationFrameId = requestAnimationFrame(this.gameLoop);
   };
   
@@ -228,7 +276,7 @@ export class AppComponent implements OnDestroy {
 
           if (i === index1) {
             destX = (startCol1 + (endCol1 - startCol1) * progress) * tileWidth;
-            destY = (startRow1 + (endRow1 - startRow1) * progress) * tileHeight;
+            destY = (startRow1 + (endRow1 - startCol1) * progress) * tileHeight;
           } else if (i === index2) {
             destX = (endCol1 - (endCol1 - startCol1) * progress) * tileWidth;
             destY = (endRow1 - (endRow1 - startRow1) * progress) * tileHeight;
@@ -270,9 +318,55 @@ export class AppComponent implements OnDestroy {
     }
   }
 
+  private drawPreview(): void {
+    const previewCanvas = this.previewCanvas?.nativeElement;
+    const video = this.videoElement.nativeElement;
+    if (!previewCanvas || !video || video.readyState < video.HAVE_METADATA) return;
+    
+    const ctx = previewCanvas.getContext('2d');
+    if (!ctx) return;
+
+    const videoWidth = video.videoWidth;
+    const videoHeight = video.videoHeight;
+    const sourceSize = Math.min(videoWidth, videoHeight);
+    const sx = (videoWidth - sourceSize) / 2;
+    const sy = (videoHeight - sourceSize) / 2;
+
+    ctx.drawImage(
+      video,
+      sx,
+      sy,
+      sourceSize,
+      sourceSize,
+      0,
+      0,
+      previewCanvas.width,
+      previewCanvas.height
+    );
+  }
+
   private checkWinCondition(): void {
     if (this.isSolved(this.tiles())) {
+      const endTime = performance.now();
+      this.timeTaken.set(endTime - this.startTime);
       this.gameState.set('won');
+      this.launchConfetti();
     }
+  }
+
+  private launchConfetti(): void {
+    const particles: ConfettiParticle[] = [];
+    const colors = ['#fde047', '#f97316', '#ec4899', '#8b5cf6', '#3b82f6', '#22c55e'];
+    for (let i = 0; i < 150; i++) {
+      particles.push({
+        left: `${Math.random() * 100}%`,
+        background: colors[Math.floor(Math.random() * colors.length)],
+        width: `${Math.random() * 8 + 6}px`,
+        height: `${Math.random() * 6 + 4}px`,
+        animationDuration: `${Math.random() * 3 + 4}s`,
+        animationDelay: `${Math.random() * 3}s`
+      });
+    }
+    this.confettiParticles.set(particles);
   }
 }

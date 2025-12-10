@@ -1,4 +1,4 @@
-<main class="min-h-screen w-full flex flex-col items-center justify-center p-4 bg-slate-900 font-sans">
+<main class="min-h-screen w-full flex flex-col items-center justify-center p-4 bg-slate-900 font-sans overflow-hidden">
   <div class="relative w-full max-w-4xl flex flex-col items-center gap-6">
     
     <h1 class="text-4xl md:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-emerald-400 text-center">
@@ -32,14 +32,11 @@
                 (click)="handleCanvasClick($event)"
                 class="rounded-lg shadow-2xl shadow-sky-500/20 w-full h-auto cursor-pointer"
                 [class.cursor-default]="gameState() === 'won'"></canvas>
-
-        @if (gameState() === 'won') {
-          <div class="absolute inset-0 bg-black/70 flex flex-col items-center justify-center rounded-lg backdrop-blur-sm animate-fade-in">
-              <h2 class="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-orange-400 mb-2">You Win!</h2>
-              <p class="text-slate-200 mb-6">Congratulations, you unscrambled the view!</p>
-              <button (click)="resetGame()" class="px-6 py-2 bg-sky-500 hover:bg-sky-400 text-slate-900 font-bold rounded-lg transition-transform duration-300 hover:scale-105">
-                  Play Again
-              </button>
+        
+        <!-- Live preview of the solved puzzle -->
+        @if (gameState() === 'playing') {
+          <div class="absolute bottom-4 right-4 bg-slate-900/50 p-1 rounded-lg border border-slate-600 backdrop-blur-sm shadow-lg">
+            <canvas #previewCanvas width="120" height="120" class="rounded-md"></canvas>
           </div>
         }
       </div>
@@ -49,6 +46,39 @@
       </button>
     }
   </div>
+
+  <!-- Win state overlay and confetti -->
+  @if (gameState() === 'won') {
+    <div class="fixed inset-0 bg-black/70 flex flex-col items-center justify-center backdrop-blur-sm z-10 animate-fade-in">
+        <div class="text-center p-8 rounded-lg animate-zoom-in-fade">
+            <h2 class="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-orange-400 mb-2">You Win!</h2>
+            <p class="text-slate-200 mb-6">Congratulations, you unscrambled the view!</p>
+            <div class="flex gap-8 justify-center mb-8 text-slate-300">
+                <div>
+                    <div class="text-3xl font-bold text-sky-400">{{ moveCount() }}</div>
+                    <div class="text-sm">Moves</div>
+                </div>
+                <div>
+                    <div class="text-3xl font-bold text-sky-400 text-center">{{ formattedTime() }}</div>
+                    <div class="text-sm text-center">Time</div>
+                </div>
+            </div>
+            <button (click)="resetGame()" class="px-8 py-3 bg-sky-500 hover:bg-sky-400 text-slate-900 font-bold rounded-lg transition-transform duration-300 hover:scale-105 text-lg">
+                Play Again
+            </button>
+        </div>
+    </div>
+    <div class="fixed inset-0 pointer-events-none z-20 overflow-hidden">
+      @for(particle of confettiParticles(); track $index) {
+        <div class="absolute" 
+             [style.left]="particle.left" 
+             [style.background]="particle.background"
+             [style.width]="particle.width"
+             [style.height]="particle.height"
+             [style.animation]="'fall-tumble ' + particle.animationDuration + ' ' + particle.animationDelay + ' ease-in forwards'"></div>
+      }
+    </div>
+  }
 </main>
 
 <style>
@@ -58,5 +88,26 @@
   }
   .animate-fade-in {
     animation: fade-in 0.5s ease-in-out;
+  }
+
+  @keyframes zoom-in-fade {
+    from { opacity: 0; transform: scale(0.5); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  .animate-zoom-in-fade {
+    animation: zoom-in-fade 0.5s ease-in-out forwards;
+    animation-delay: 0.2s;
+    opacity: 0;
+  }
+
+  @keyframes fall-tumble {
+    from {
+      transform: translateY(-20px) rotate(0deg);
+      opacity: 1;
+    }
+    to {
+      transform: translateY(105vh) rotate(720deg);
+      opacity: 0;
+    }
   }
 </style>
