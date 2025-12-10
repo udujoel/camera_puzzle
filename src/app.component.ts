@@ -37,11 +37,13 @@ export class AppComponent implements OnDestroy {
   moveCount = signal(0);
   timeTaken = signal(0); // in milliseconds
   confettiParticles = signal<ConfettiParticle[]>([]);
+  showPreview = signal(false);
 
   private stream: MediaStream | null = null;
   private animationFrameId: number | null = null;
   private currentAnimation: AnimationState | null = null;
   private startTime = 0;
+  private previewTimer: any = null;
   
   public readonly PUZZLE_DIMENSION = PUZZLE_DIMENSION;
 
@@ -68,6 +70,9 @@ export class AppComponent implements OnDestroy {
 
   ngOnDestroy(): void {
     this.stopGame();
+    if (this.previewTimer) {
+        clearTimeout(this.previewTimer);
+    }
   }
 
   async startGame(): Promise<void> {
@@ -78,6 +83,9 @@ export class AppComponent implements OnDestroy {
       video.srcObject = this.stream;
       video.onplaying = () => {
         this.initializePuzzle();
+        if (this.animationFrameId === null) {
+            this.gameLoop();
+        }
       };
     } catch (err) {
       this.handleCameraError(err);
@@ -99,7 +107,20 @@ export class AppComponent implements OnDestroy {
     this.timeTaken.set(0);
     this.startTime = performance.now();
     this.shuffleTiles();
-    this.gameLoop();
+    this.peekPreview();
+  }
+  
+  restartPuzzle(): void {
+      if (this.gameState() !== 'playing') return;
+      this.initializePuzzle();
+  }
+
+  peekPreview(): void {
+    if (this.previewTimer) {
+        clearTimeout(this.previewTimer);
+    }
+    this.showPreview.set(true);
+    this.previewTimer = setTimeout(() => this.showPreview.set(false), 2500);
   }
 
   private handleCameraError(err: unknown): void {
@@ -131,6 +152,11 @@ export class AppComponent implements OnDestroy {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
     }
+    if (this.previewTimer) {
+        clearTimeout(this.previewTimer);
+        this.previewTimer = null;
+    }
+    this.showPreview.set(false);
     this.stream?.getTracks().forEach(track => track.stop());
     this.stream = null;
     const initialTiles = Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, i) => i);

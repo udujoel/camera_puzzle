@@ -1,4 +1,4 @@
-<main class="min-h-screen w-full flex flex-col items-center justify-center p-4 bg-slate-900 font-sans overflow-hidden">
+<main class="min-h-screen w-full flex flex-col items-center justify-center p-4 bg-slate-900 font-sans">
   <div class="relative w-full max-w-4xl flex flex-col items-center gap-6">
     
     <h1 class="text-4xl md:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-emerald-400 text-center">
@@ -34,16 +34,21 @@
                 [class.cursor-default]="gameState() === 'won'"></canvas>
         
         <!-- Live preview of the solved puzzle -->
-        @if (gameState() === 'playing') {
-          <div class="absolute bottom-4 right-4 bg-slate-900/50 p-1 rounded-lg border border-slate-600 backdrop-blur-sm shadow-lg">
-            <canvas #previewCanvas width="120" height="120" class="rounded-md"></canvas>
-          </div>
-        }
+        <div class="preview-container" 
+            [class.preview-visible]="showPreview()"
+            [class.preview-hidden]="!showPreview()">
+          <canvas #previewCanvas width="120" height="120" class="rounded-md"></canvas>
+        </div>
       </div>
       
-      <button (click)="resetGame()" [class.invisible]="gameState() === 'won'" class="px-6 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold rounded-lg transition-all duration-300">
-        Reset Puzzle
-      </button>
+      <div class="flex items-center gap-4" [class.invisible]="gameState() === 'won'">
+        <button (click)="peekPreview()" class="px-6 py-2 bg-sky-700 hover:bg-sky-600 text-sky-100 font-semibold rounded-lg transition-all duration-300">
+            Show Hint
+        </button>
+        <button (click)="restartPuzzle()" class="px-6 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold rounded-lg transition-all duration-300">
+            Reset Puzzle
+        </button>
+      </div>
     }
   </div>
 
@@ -68,7 +73,7 @@
             </button>
         </div>
     </div>
-    <div class="fixed inset-0 pointer-events-none z-20 overflow-hidden">
+    <div class="fixed inset-0 pointer-events-none z-20">
       @for(particle of confettiParticles(); track $index) {
         <div class="absolute" 
              [style.left]="particle.left" 
@@ -109,5 +114,27 @@
       transform: translateY(105vh) rotate(720deg);
       opacity: 0;
     }
+  }
+
+  .preview-container {
+    position: absolute;
+    bottom: 1rem;
+    right: 1rem;
+    background-color: rgba(30, 41, 59, 0.5); /* bg-slate-800/50 */
+    padding: 0.25rem;
+    border-radius: 0.5rem;
+    border: 1px solid rgb(51 65 85); /* border-slate-700 */
+    backdrop-filter: blur(4px);
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    transition: opacity 0.4s ease-in-out, transform 0.4s ease-in-out;
+  }
+  .preview-hidden {
+    opacity: 0;
+    transform: translateY(100%) translateY(1rem); /* Move it down out of view */
+    pointer-events: none;
+  }
+  .preview-visible {
+    opacity: 1;
+    transform: translateY(0);
   }
 </style>
