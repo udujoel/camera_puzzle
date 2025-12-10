@@ -1,0 +1,62 @@
+<main class="min-h-screen w-full flex flex-col items-center justify-center p-4 bg-slate-900 font-sans">
+  <div class="relative w-full max-w-4xl flex flex-col items-center gap-6">
+    
+    <h1 class="text-4xl md:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-emerald-400 text-center">
+      Camera Puzzle Scramble
+    </h1>
+
+    <!-- The video element is now always present but positioned off-screen. -->
+    <!-- This ensures it remains active for canvas drawing, preventing rendering issues caused by 'display: none'. -->
+    <video #videoElement autoplay muted playsinline style="position: absolute; top: -9999px; left: -9999px;"></video>
+
+    @if (gameState() === 'idle') {
+      <div class="text-center p-8 bg-slate-800/50 rounded-lg shadow-2xl backdrop-blur-sm border border-slate-700">
+        <p class="text-slate-300 mb-6">Unscramble your live camera feed! The image will be broken into tiles and shuffled. Click two tiles to swap them until the picture is correct.</p>
+        <button (click)="startGame()" class="px-8 py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-bold rounded-lg text-lg transition-all duration-300 shadow-lg hover:shadow-emerald-500/30 transform hover:scale-105">
+          Start Game
+        </button>
+      </div>
+    }
+
+    @if (gameState() === 'error') {
+      <div class="text-center p-8 bg-red-900/50 rounded-lg shadow-2xl backdrop-blur-sm border border-red-700">
+        <h2 class="text-2xl font-bold text-red-400 mb-4">Error</h2>
+        <p class="text-slate-300">{{ cameraError() }}</p>
+      </div>
+    }
+
+    @if (gameState() === 'playing' || gameState() === 'won') {
+      <div class="relative w-full" [style.max-width.px]="PUZZLE_DIMENSION">
+        <!-- Canvas for rendering the puzzle -->
+        <canvas #puzzleCanvas 
+                (click)="handleCanvasClick($event)"
+                class="rounded-lg shadow-2xl shadow-sky-500/20 w-full h-auto cursor-pointer"
+                [class.cursor-default]="gameState() === 'won'"></canvas>
+
+        @if (gameState() === 'won') {
+          <div class="absolute inset-0 bg-black/70 flex flex-col items-center justify-center rounded-lg backdrop-blur-sm animate-fade-in">
+              <h2 class="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-orange-400 mb-2">You Win!</h2>
+              <p class="text-slate-200 mb-6">Congratulations, you unscrambled the view!</p>
+              <button (click)="resetGame()" class="px-6 py-2 bg-sky-500 hover:bg-sky-400 text-slate-900 font-bold rounded-lg transition-transform duration-300 hover:scale-105">
+                  Play Again
+              </button>
+          </div>
+        }
+      </div>
+      
+      <button (click)="resetGame()" [class.invisible]="gameState() === 'won'" class="px-6 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold rounded-lg transition-all duration-300">
+        Reset Puzzle
+      </button>
+    }
+  </div>
+</main>
+
+<style>
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  .animate-fade-in {
+    animation: fade-in 0.5s ease-in-out;
+  }
+</style>
