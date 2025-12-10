@@ -111,7 +111,6 @@ export class AppComponent implements OnDestroy {
     }
 
     // Ensure it's not already solved
-    // FIX: Implement isSolved method.
     if (this.isSolved(currentTiles)) {
       // Simple swap to guarantee it's not solved
       [currentTiles[0], currentTiles[1]] = [currentTiles[1], currentTiles[0]];
@@ -216,8 +215,12 @@ export class AppComponent implements OnDestroy {
       if (this.currentAnimation) {
           const { index1, index2, startTime, duration } = this.currentAnimation;
           const elapsedTime = performance.now() - startTime;
-          const progress = Math.min(elapsedTime / duration, 1);
+          let progress = Math.min(elapsedTime / duration, 1);
           
+          // Apply an ease-in-out timing function for a smoother animation
+          const easeInOutQuad = (t: number) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+          progress = easeInOutQuad(progress);
+
           const startCol1 = index1 % GRID_SIZE;
           const startRow1 = Math.floor(index1 / GRID_SIZE);
           const endCol1 = index2 % GRID_SIZE;
@@ -237,13 +240,11 @@ export class AppComponent implements OnDestroy {
             this.tiles.set(tilesCopy);
             this.currentAnimation = null;
             if (!this.isShuffling()) {
-                // FIX: Implement checkWinCondition method.
                 this.checkWinCondition();
             }
           }
       }
 
-      // FIX: Correct arguments for drawImage, which expects destination width and height.
       ctx.drawImage(
         video,
         sx + sourceCol * (sourceSize / GRID_SIZE),
@@ -255,6 +256,17 @@ export class AppComponent implements OnDestroy {
         tileWidth,
         tileHeight
       );
+    }
+
+    // Highlight the selected tile
+    const selectedIdx = this.selectedTileIndex();
+    if (selectedIdx !== null && !this.currentAnimation && this.gameState() === 'playing') {
+      const col = selectedIdx % GRID_SIZE;
+      const row = Math.floor(selectedIdx / GRID_SIZE);
+
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.9)'; // A bright blue (sky-400)
+      ctx.lineWidth = 4;
+      ctx.strokeRect(col * tileWidth + 2, row * tileHeight + 2, tileWidth - 4, tileHeight - 4);
     }
   }
 
