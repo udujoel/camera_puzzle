@@ -18,6 +18,21 @@ interface ConfettiParticle {
   animationDelay: string;
 }
 
+interface Score {
+  score: number;
+  moves: number;
+  time: number; // ms
+  date: number; // timestamp
+}
+
+type Leaderboard = {
+  '3': Score[];
+  '4': Score[];
+  '5': Score[];
+};
+
+const LEADERBOARD_KEY = 'camera-puzzle-leaderboard';
+
 @Component({
   selector: 'app-root',
   templateUrl: './app.component.html',
@@ -30,18 +45,22 @@ export class AppComponent implements OnDestroy, AfterViewInit {
 
   gameState: WritableSignal<'idle' | 'playing' | 'won' | 'error'> = signal('idle');
   cameraError: WritableSignal<string | null> = signal(null);
-  gridSize = signal(3); // Default value, will be set on startGame
+  gridSize = signal(3);
   tiles: WritableSignal<number[]> = signal([]);
   selectedTileIndex: WritableSignal<number | null> = signal(null);
   isShuffling = signal(false);
   moveCount = signal(0);
-  timeTaken = signal(0); // in milliseconds
+  timeTaken = signal(0);
   confettiParticles = signal<ConfettiParticle[]>([]);
   showPreview = signal(false);
   showDifficultySelection = signal(false);
   typingState = signal<'pre-typing' | 'typing' | 'done'>('pre-typing');
-  instructionText = "Unscramble your live camera feed! The image will be broken into tiles and shuffled. Click two tiles to swap them until the picture is correct.";
   displayedInstructionText = signal('');
+
+  // Leaderboard and Score
+  leaderboard = signal<Leaderboard>({ '3': [], '4': [], '5': [] });
+  activeLeaderboardTab = signal<3 | 4 | 5>(3);
+  currentScore = signal(0);
 
   private stream: MediaStream | null = null;
   private animationFrameId: number | null = null;
@@ -49,6 +68,17 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   private startTime = 0;
   private previewTimer: any = null;
   private typingTimeout: any;
+
+  private tips = [
+    "Welcome to the Camera Puzzle!",
+    "Unscramble your live camera feed by swapping the tiles.",
+    "The faster you solve, the higher your score.",
+    "Challenge yourself with harder difficulties!"
+  ];
+  private currentTipIndex = 0;
+  private isDeleting = false;
+  private typingSpeed = 50;
+  private deletingSpeed = 30;
   
   public readonly PUZZLE_DIMENSION = PUZZLE_DIMENSION;
 
@@ -68,7 +98,9 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     return parts.join(' and ');
   });
 
-  constructor() {}
+  constructor() {
+    this.loadLeaderboard();
+  }
 
   ngAfterViewInit(): void {
     if (this.gameState() === 'idle') {
@@ -78,28 +110,30 @@ export class AppComponent implements OnDestroy, AfterViewInit {
 
   ngOnDestroy(): void {
     this.stopGame();
-    if (this.previewTimer) {
-        clearTimeout(this.previewTimer);
-    }
-    if (this.typingTimeout) {
-      clearTimeout(this.typingTimeout);
-    }
   }
 
-  private runTypingAnimation(index = 0): void {
-    if (index >= this.instructionText.length) {
-      this.typingState.set('done');
-      return;
+  private runTypingAnimation(): void {
+    const currentTip = this.tips[this.currentTipIndex];
+    const displayedText = this.displayedInstructionText();
+
+    if (this.isDeleting) {
+      this.displayedInstructionText.update(val => val.slice(0, -1));
+      if (displayedText.length > 0) {
+        this.typingTimeout = setTimeout(() => this.runTypingAnimation(), this.deletingSpeed);
+      } else {
+        this.isDeleting = false;
+        this.currentTipIndex = (this.currentTipIndex + 1) % this.tips.length;
+        this.typingTimeout = setTimeout(() => this.runTypingAnimation(), 500);
+      }
+    } else {
+      if (displayedText.length < currentTip.length) {
+        this.displayedInstructionText.update(val => currentTip.slice(0, val.length + 1));
+        this.typingTimeout = setTimeout(() => this.runTypingAnimation(), this.typingSpeed);
+      } else {
+        this.isDeleting = true;
+        this.typingTimeout = setTimeout(() => this.runTypingAnimation(), 3000);
+      }
     }
-
-    this.displayedInstructionText.update(val => val + this.instructionText[index]);
-    
-    const char = this.instructionText[index];
-    let delay = 50;
-    if (char === '.' || char === '!') delay = 500;
-    if (char === ',') delay = 250;
-
-    this.typingTimeout = setTimeout(() => this.runTypingAnimation(index + 1), delay);
   }
 
   async startGame(size: number): Promise<void> {
@@ -211,9 +245,10 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     if (this.typingTimeout) {
       clearTimeout(this.typingTimeout);
     }
-    // Wait for 2 blinks (1.5s for 0.75s blink animation)
     this.typingTimeout = setTimeout(() => {
       this.typingState.set('typing');
+      this.isDeleting = false;
+      this.currentTipIndex = 0;
       this.runTypingAnimation();
     }, 1500);
   }
@@ -424,10 +459,42 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   private checkWinCondition(): void {
     if (this.isSolved(this.tiles())) {
       const endTime = performance.now();
-      this.timeTaken.set(endTime - this.startTime);
+      const timeTakenMs = endTime - this.startTime;
+      this.timeTaken.set(timeTakenMs);
+      this.calculateAndSaveScore(timeTakenMs);
       this.gameState.set('won');
       this.launchConfetti();
     }
+  }
+
+  private calculateAndSaveScore(timeTakenMs: number): void {
+    const gridSize = this.gridSize();
+    const moves = this.moveCount();
+    
+    const difficultyMultiplier = Math.pow(gridSize, 4) * 100;
+    const timePenalty = Math.floor(timeTakenMs / 50);
+    const movePenalty = moves * (gridSize * 10);
+    
+    const score = Math.max(0, Math.floor(difficultyMultiplier - timePenalty - movePenalty));
+    this.currentScore.set(score);
+    
+    const newScore: Score = {
+        score,
+        moves,
+        time: timeTakenMs,
+        date: Date.now()
+    };
+    
+    this.leaderboard.update(currentLeaderboard => {
+        const key = String(gridSize) as keyof Leaderboard;
+        const boardForDifficulty = [...currentLeaderboard[key]];
+        boardForDifficulty.push(newScore);
+        boardForDifficulty.sort((a, b) => b.score - a.score);
+        currentLeaderboard[key] = boardForDifficulty.slice(0, 5);
+        return currentLeaderboard;
+    });
+    
+    this.saveLeaderboard();
   }
 
   private launchConfetti(): void {
@@ -444,5 +511,39 @@ export class AppComponent implements OnDestroy, AfterViewInit {
       });
     }
     this.confettiParticles.set(particles);
+  }
+
+  private loadLeaderboard(): void {
+    try {
+        const data = localStorage.getItem(LEADERBOARD_KEY);
+        if (data) {
+            const parsed = JSON.parse(data) as Leaderboard;
+            if (parsed['3'] && parsed['4'] && parsed['5']) {
+                this.leaderboard.set(parsed);
+            }
+        }
+    } catch (e) {
+        console.error("Failed to load leaderboard from localStorage", e);
+    }
+  }
+
+  private saveLeaderboard(): void {
+      try {
+          localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(this.leaderboard()));
+      } catch (e) {
+          console.error("Failed to save leaderboard to localStorage", e);
+      }
+  }
+
+  setActiveLeaderboardTab(size: 3 | 4 | 5): void {
+      this.activeLeaderboardTab.set(size);
+  }
+
+  formatLeaderboardTime(ms: number): string {
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    const milliseconds = Math.floor((ms % 1000) / 10);
+    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(milliseconds).padStart(2, '0')}`;
   }
 }

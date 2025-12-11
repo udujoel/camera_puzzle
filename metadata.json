@@ -1,5 +1,5 @@
 {
-  "name": "Camera Puzzle Scramble",
+  "name": "Camera Puzzle",
   "description": "Unscramble your live camera feed in this challenging tile puzzle game. Click to swap tiles and restore the image.",
   "requestFramePermissions": [
     "camera"
