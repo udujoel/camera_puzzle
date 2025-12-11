@@ -8,9 +8,9 @@
     <video #videoElement autoplay muted playsinline style="position: absolute; top: -9999px; left: -9999px;"></video>
 
     @if (gameState() === 'idle') {
-      <div class="flex flex-col md:flex-row gap-8 items-start w-full max-w-5xl">
-        <!-- Left Side: Play controls -->
-        <div class="flex-1 text-center p-8 bg-slate-900/60 rounded-lg shadow-2xl backdrop-blur-md w-full">
+      <div class="flex flex-col items-center gap-16 w-full">
+        <!-- Main interactive box -->
+        <div class="w-full max-w-2xl text-center p-8 bg-slate-900/60 rounded-lg shadow-2xl backdrop-blur-md">
           <div class="relative flex items-center justify-center font-mono text-center w-full" style="min-height: 80px;">
             @if (typingState() === 'pre-typing') {
               <span class="blinking-cursor-centered"></span>
@@ -47,22 +47,23 @@
             </div>
           </div>
         </div>
-        <!-- Right Side: Leaderboard -->
-        <div class="flex-1 p-6 bg-slate-900/60 rounded-lg shadow-2xl backdrop-blur-md w-full">
+
+        <!-- Leaderboard at the bottom -->
+        <div class="w-full max-w-5xl">
           <h2 class="text-2xl font-bold text-center text-sky-300 mb-4">Personal Best</h2>
           <div class="flex justify-center mb-4 border-b border-slate-700 leaderboard-tabs">
               <button (click)="setActiveLeaderboardTab(3)" [class.active]="activeLeaderboardTab() === 3">Easy</button>
               <button (click)="setActiveLeaderboardTab(4)" [class.active]="activeLeaderboardTab() === 4">Medium</button>
               <button (click)="setActiveLeaderboardTab(5)" [class.active]="activeLeaderboardTab() === 5">Hard</button>
           </div>
-          <div class="score-list-container" style="min-height: 240px;">
+          <div class="score-list-container" style="min-height: 150px;">
             @if (leaderboard()[activeLeaderboardTab()].length > 0) {
-              <ol class="score-list">
+              <ol class="score-stats-list">
                 @for (score of leaderboard()[activeLeaderboardTab()]; track score.date; let i = $index) {
-                  <li>
-                    <span class="score-rank">{{i + 1}}.</span>
-                    <span class="score-value">{{score.score.toLocaleString()}} pts</span>
-                    <span class="score-details">{{score.moves}} moves / {{formatLeaderboardTime(score.time)}}</span>
+                  <li class="score-stat-item">
+                    <span class="rank">#{{ i + 1 }}</span>
+                    <span class="score">{{ score.score.toLocaleString() }} pts</span>
+                    <span class="details">{{ score.moves }} moves / {{ formatLeaderboardTime(score.time) }}</span>
                   </li>
                 }
               </ol>
@@ -252,34 +253,38 @@
     background-color: rgba(255, 255, 255, 0.05);
   }
 
-  .score-list {
+  .score-stats-list {
     list-style: none;
     padding: 0;
     margin: 0;
-  }
-  .score-list li {
-    display: grid;
-    grid-template-columns: auto 1fr auto;
+    display: flex;
+    justify-content: center;
     gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .score-stat-item {
+    display: flex;
+    flex-direction: column;
     align-items: center;
-    padding: 0.75rem 0.5rem;
-    border-bottom: 1px solid #334155;
-    font-family: monospace;
+    gap: 0.25rem;
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    background-color: rgba(30, 41, 59, 0.3);
+    min-width: 160px;
   }
-  .score-list li:last-child {
-    border-bottom: none;
-  }
-  .score-list li .score-rank {
+  .score-stat-item .rank {
     font-weight: bold;
     color: #7dd3fc;
+    font-size: 0.875rem;
   }
-  .score-list li .score-value {
+  .score-stat-item .score {
     color: #fde047;
     font-weight: bold;
+    font-size: 1.25rem;
   }
-  .score-list li .score-details {
+  .score-stat-item .details {
     color: #cbd5e1;
-    font-size: 0.875rem;
-    text-align: right;
+    font-size: 0.75rem;
+    font-family: monospace;
   }
 </style>
