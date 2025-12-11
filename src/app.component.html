@@ -10,11 +10,20 @@
     <video #videoElement autoplay muted playsinline style="position: absolute; top: -9999px; left: -9999px;"></video>
 
     @if (gameState() === 'idle') {
-      <div class="text-center p-8 bg-slate-800/50 rounded-lg shadow-2xl backdrop-blur-sm border border-slate-700">
+      <div class="text-center p-8 bg-slate-800/50 rounded-lg shadow-2xl backdrop-blur-sm border border-slate-700 max-w-lg">
         <p class="text-slate-300 mb-6">Unscramble your live camera feed! The image will be broken into tiles and shuffled. Click two tiles to swap them until the picture is correct.</p>
-        <button (click)="startGame()" class="px-8 py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-bold rounded-lg text-lg transition-all duration-300 shadow-lg hover:shadow-emerald-500/30 transform hover:scale-105">
-          Start Game
-        </button>
+        <p class="text-slate-100 font-semibold mb-4 text-lg">Choose a difficulty:</p>
+        <div class="flex flex-col sm:flex-row gap-4 justify-center">
+            <button (click)="startGame(3)" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-lg transition-all duration-300 shadow-lg hover:shadow-emerald-500/30 transform hover:scale-105">
+              Easy (3x3)
+            </button>
+            <button (click)="startGame(4)" class="px-6 py-3 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-lg text-lg transition-all duration-300 shadow-lg hover:shadow-sky-500/30 transform hover:scale-105">
+              Medium (4x4)
+            </button>
+            <button (click)="startGame(5)" class="px-6 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg text-lg transition-all duration-300 shadow-lg hover:shadow-red-500/30 transform hover:scale-105">
+              Hard (5x5)
+            </button>
+        </div>
       </div>
     }
 

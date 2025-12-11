@@ -1,7 +1,6 @@
 import { Component, signal, ChangeDetectionStrategy, ViewChild, ElementRef, OnDestroy, WritableSignal, computed } from '@angular/core';
 
-const GRID_SIZE = 3;
-const PUZZLE_DIMENSION = 600; // Should be easily divisible by GRID_SIZE
+const PUZZLE_DIMENSION = 600; // Should be easily divisible by grid sizes (3, 4, 5)
 
 interface AnimationState {
   index1: number;
@@ -31,6 +30,7 @@ export class AppComponent implements OnDestroy {
 
   gameState: WritableSignal<'idle' | 'playing' | 'won' | 'error'> = signal('idle');
   cameraError: WritableSignal<string | null> = signal(null);
+  gridSize = signal(3); // Default value, will be set on startGame
   tiles: WritableSignal<number[]> = signal([]);
   selectedTileIndex: WritableSignal<number | null> = signal(null);
   isShuffling = signal(false);
@@ -64,8 +64,7 @@ export class AppComponent implements OnDestroy {
   });
 
   constructor() {
-    const initialTiles = Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, i) => i);
-    this.tiles.set(initialTiles);
+    // Tile initialization is now done in initializePuzzle()
   }
 
   ngOnDestroy(): void {
@@ -75,7 +74,8 @@ export class AppComponent implements OnDestroy {
     }
   }
 
-  async startGame(): Promise<void> {
+  async startGame(size: number): Promise<void> {
+    this.gridSize.set(size);
     this.gameState.set('playing');
     try {
       this.stream = await navigator.mediaDevices.getUserMedia({ video: { width: PUZZLE_DIMENSION, height: PUZZLE_DIMENSION } });
@@ -93,6 +93,10 @@ export class AppComponent implements OnDestroy {
   }
 
   private initializePuzzle(): void {
+    const gridSize = this.gridSize();
+    const initialTiles = Array.from({ length: gridSize * gridSize }, (_, i) => i);
+    this.tiles.set(initialTiles);
+
     const canvas = this.puzzleCanvas?.nativeElement;
     const previewCanvas = this.previewCanvas?.nativeElement;
     if (canvas) {
@@ -159,8 +163,7 @@ export class AppComponent implements OnDestroy {
     this.showPreview.set(false);
     this.stream?.getTracks().forEach(track => track.stop());
     this.stream = null;
-    const initialTiles = Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, i) => i);
-    this.tiles.set(initialTiles);
+    this.tiles.set([]);
     this.isShuffling.set(false);
     
     // Clear preview canvas
@@ -189,11 +192,13 @@ export class AppComponent implements OnDestroy {
     this.tiles.set(currentTiles);
 
     // Animate the shuffle
+    const gridSize = this.gridSize();
+    const tileCount = gridSize * gridSize;
     const shuffleAnimations: { index1: number; index2: number }[] = [];
-    for (let i = 0; i < GRID_SIZE * GRID_SIZE * 2; i++) {
+    for (let i = 0; i < tileCount * 2; i++) {
       shuffleAnimations.push({
-        index1: Math.floor(Math.random() * (GRID_SIZE * GRID_SIZE)),
-        index2: Math.floor(Math.random() * (GRID_SIZE * GRID_SIZE)),
+        index1: Math.floor(Math.random() * tileCount),
+        index2: Math.floor(Math.random() * tileCount),
       });
     }
 
@@ -223,12 +228,13 @@ export class AppComponent implements OnDestroy {
     const rect = canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
+    const gridSize = this.gridSize();
 
-    const tileWidth = canvas.width / GRID_SIZE;
-    const tileHeight = canvas.height / GRID_SIZE;
+    const tileWidth = canvas.width / gridSize;
+    const tileHeight = canvas.height / gridSize;
     const col = Math.floor(x / tileWidth);
     const row = Math.floor(y / tileHeight);
-    const clickedIndex = row * GRID_SIZE + col;
+    const clickedIndex = row * gridSize + col;
     
     const selectedIdx = this.selectedTileIndex();
     if (selectedIdx === null) {
@@ -262,8 +268,9 @@ export class AppComponent implements OnDestroy {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const tileWidth = PUZZLE_DIMENSION / GRID_SIZE;
-    const tileHeight = PUZZLE_DIMENSION / GRID_SIZE;
+    const gridSize = this.gridSize();
+    const tileWidth = PUZZLE_DIMENSION / gridSize;
+    const tileHeight = PUZZLE_DIMENSION / gridSize;
     
     const videoWidth = video.videoWidth;
     const videoHeight = video.videoHeight;
@@ -277,11 +284,11 @@ export class AppComponent implements OnDestroy {
 
     for (let i = 0; i < currentTiles.length; i++) {
       const tileValue = currentTiles[i];
-      const sourceCol = tileValue % GRID_SIZE;
-      const sourceRow = Math.floor(tileValue / GRID_SIZE);
+      const sourceCol = tileValue % gridSize;
+      const sourceRow = Math.floor(tileValue / gridSize);
 
-      const destCol = i % GRID_SIZE;
-      const destRow = Math.floor(i / GRID_SIZE);
+      const destCol = i % gridSize;
+      const destRow = Math.floor(i / gridSize);
       
       let destX = destCol * tileWidth;
       let destY = destRow * tileHeight;
@@ -295,10 +302,10 @@ export class AppComponent implements OnDestroy {
           const easeInOutQuad = (t: number) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
           progress = easeInOutQuad(progress);
 
-          const startCol1 = index1 % GRID_SIZE;
-          const startRow1 = Math.floor(index1 / GRID_SIZE);
-          const endCol1 = index2 % GRID_SIZE;
-          const endRow1 = Math.floor(index2 / GRID_SIZE);
+          const startCol1 = index1 % gridSize;
+          const startRow1 = Math.floor(index1 / gridSize);
+          const endCol1 = index2 % gridSize;
+          const endRow1 = Math.floor(index2 / gridSize);
 
           if (i === index1) {
             destX = (startCol1 + (endCol1 - startCol1) * progress) * tileWidth;
@@ -321,10 +328,10 @@ export class AppComponent implements OnDestroy {
 
       ctx.drawImage(
         video,
-        sx + sourceCol * (sourceSize / GRID_SIZE),
-        sy + sourceRow * (sourceSize / GRID_SIZE),
-        sourceSize / GRID_SIZE,
-        sourceSize / GRID_SIZE,
+        sx + sourceCol * (sourceSize / gridSize),
+        sy + sourceRow * (sourceSize / gridSize),
+        sourceSize / gridSize,
+        sourceSize / gridSize,
         destX,
         destY,
         tileWidth,
@@ -335,8 +342,8 @@ export class AppComponent implements OnDestroy {
     // Highlight the selected tile
     const selectedIdx = this.selectedTileIndex();
     if (selectedIdx !== null && !this.currentAnimation && this.gameState() === 'playing') {
-      const col = selectedIdx % GRID_SIZE;
-      const row = Math.floor(selectedIdx / GRID_SIZE);
+      const col = selectedIdx % gridSize;
+      const row = Math.floor(selectedIdx / gridSize);
 
       ctx.strokeStyle = 'rgba(56, 189, 248, 0.9)'; // A bright blue (sky-400)
       ctx.lineWidth = 4;
