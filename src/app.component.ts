@@ -42,6 +42,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   isTypingAnimationDone = signal(false);
   instructionText = "Unscramble your live camera feed! The image will be broken into tiles and shuffled. Click two tiles to swap them until the picture is correct.";
   instructionChars = this.instructionText.split('');
+  charAnimationDelays: number[] = [];
   
   private stream: MediaStream | null = null;
   private animationFrameId: number | null = null;
@@ -69,7 +70,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   });
 
   constructor() {
-    // Tile initialization is now done in initializePuzzle()
+    this.prepareTypingAnimation();
   }
 
   ngAfterViewInit(): void {
@@ -86,6 +87,21 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     if (this.typingTimeout) {
       clearTimeout(this.typingTimeout);
     }
+  }
+
+  private prepareTypingAnimation(): void {
+    let delay = 0;
+    this.instructionChars.forEach(char => {
+      this.charAnimationDelays.push(delay);
+      delay += 40; // Natural typing speed
+      if (char === ' ' || char === '!' || char === '.') {
+        delay += 200; // Pause after words/sentences for a batch effect
+      }
+    });
+    const totalAnimationDuration = delay + 500; // Total time + buffer
+    this.typingTimeout = setTimeout(() => {
+      this.isTypingAnimationDone.set(true);
+    }, totalAnimationDuration);
   }
 
   async startGame(size: number): Promise<void> {
@@ -186,7 +202,6 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     this.tiles.set([]);
     this.isShuffling.set(false);
     
-    // Clear preview canvas
     if(this.previewCanvas) {
         const previewCtx = this.previewCanvas.nativeElement.getContext('2d');
         previewCtx?.clearRect(0, 0, this.previewCanvas.nativeElement.width, this.previewCanvas.nativeElement.height);
@@ -194,31 +209,32 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   }
 
   private startTypingAnimation(): void {
-    const animationDuration = this.instructionChars.length * 15 + 500; // 15ms per char + 500ms buffer
-    this.typingTimeout = setTimeout(() => {
-      this.isTypingAnimationDone.set(true);
-    }, animationDuration);
+    this.isTypingAnimationDone.set(false);
+    if (this.typingTimeout) {
+      clearTimeout(this.typingTimeout);
+    }
+    this.prepareTypingAnimation();
   }
   
+  toggleDifficultySelection(): void {
+    this.showDifficultySelection.update(v => !v);
+  }
+
   private async shuffleTiles(): Promise<void> {
     this.isShuffling.set(true);
     let currentTiles = [...this.tiles()];
     
-    // Fisher-Yates shuffle
     for (let i = currentTiles.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [currentTiles[i], currentTiles[j]] = [currentTiles[j], currentTiles[i]];
     }
 
-    // Ensure it's not already solved
     if (this.isSolved(currentTiles)) {
-      // Simple swap to guarantee it's not solved
       [currentTiles[0], currentTiles[1]] = [currentTiles[1], currentTiles[0]];
     }
     
     this.tiles.set(currentTiles);
 
-    // Animate the shuffle
     const gridSize = this.gridSize();
     const tileCount = gridSize * gridSize;
     const shuffleAnimations: { index1: number; index2: number }[] = [];
@@ -325,7 +341,6 @@ export class AppComponent implements OnDestroy, AfterViewInit {
           const elapsedTime = performance.now() - startTime;
           let progress = Math.min(elapsedTime / duration, 1);
           
-          // Apply an ease-in-out timing function for a smoother animation
           const easeInOutQuad = (t: number) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
           progress = easeInOutQuad(progress);
 
@@ -366,13 +381,12 @@ export class AppComponent implements OnDestroy, AfterViewInit {
       );
     }
 
-    // Highlight the selected tile
     const selectedIdx = this.selectedTileIndex();
     if (selectedIdx !== null && !this.currentAnimation && this.gameState() === 'playing') {
       const col = selectedIdx % gridSize;
       const row = Math.floor(selectedIdx / gridSize);
 
-      ctx.strokeStyle = 'rgba(56, 189, 248, 0.9)'; // A bright blue (sky-400)
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.9)';
       ctx.lineWidth = 4;
       ctx.strokeRect(col * tileWidth + 2, row * tileHeight + 2, tileWidth - 4, tileHeight - 4);
     }

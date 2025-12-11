@@ -5,8 +5,6 @@
       Camera Puzzle Scramble
     </h1>
 
-    <!-- The video element is now always present but positioned off-screen. -->
-    <!-- This ensures it remains active for canvas drawing, preventing rendering issues caused by 'display: none'. -->
     <video #videoElement autoplay muted playsinline style="position: absolute; top: -9999px; left: -9999px;"></video>
 
     @if (gameState() === 'idle') {
@@ -15,37 +13,35 @@
            style="white-space: pre-wrap; min-height: 100px;"
            [class.typing-container]="!isTypingAnimationDone()">
           @for(char of instructionChars; track $index) {
-            <span class="animate-typing" [style.animation-delay.ms]="$index * 15">{{ char }}</span>
+            <span class="animate-typing" [style.animation-delay.ms]="charAnimationDelays[$index]">{{ char }}</span>
           }
         </p>
         
-        @if (isTypingAnimationDone()) {
-          @if (!showDifficultySelection()) {
-            <div class="flex flex-col items-center gap-4 animate-fade-in">
-              <button (click)="startGame(3)" class="w-full sm:w-auto px-8 py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-xl transition-all duration-300 shadow-lg hover:shadow-emerald-500/30 transform hover:scale-105">
-                Play
-              </button>
-              <button (click)="showDifficultySelection.set(true)" class="text-sky-400 hover:text-sky-300 font-semibold transition-colors mt-2">
-                Choose Difficulty
-              </button>
+        <div class="flex flex-col items-center gap-4">
+          <button (click)="startGame(3)" class="w-full sm:w-auto px-8 py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-xl transition-all duration-300 shadow-lg hover:shadow-emerald-500/30 transform hover:scale-105">
+            Play
+          </button>
+          
+          <div>
+            <button (click)="toggleDifficultySelection()" class="text-sky-400 hover:text-sky-300 font-semibold transition-colors mt-2">
+              Choose Difficulty
+            </button>
+
+            <div class="difficulty-options" [class.open]="showDifficultySelection()">
+                <div class="flex flex-col sm:flex-row gap-4 justify-center pt-4">
+                    <button (click)="startGame(3)" class="px-6 py-3 bg-emerald-600/80 hover:bg-emerald-500/80 text-white font-bold rounded-lg text-lg transition-all duration-300 shadow-md transform hover:scale-105">
+                      Easy (3x3)
+                    </button>
+                    <button (click)="startGame(4)" class="px-6 py-3 bg-sky-600/80 hover:bg-sky-500/80 text-white font-bold rounded-lg text-lg transition-all duration-300 shadow-md transform hover:scale-105">
+                      Medium (4x4)
+                    </button>
+                    <button (click)="startGame(5)" class="px-6 py-3 bg-red-600/80 hover:bg-red-500/80 text-white font-bold rounded-lg text-lg transition-all duration-300 shadow-md transform hover:scale-105">
+                      Hard (5x5)
+                    </button>
+                </div>
             </div>
-          } @else {
-            <div class="animate-fade-in">
-              <p class="text-slate-100 font-semibold mb-4 text-lg">Choose a difficulty:</p>
-              <div class="flex flex-col sm:flex-row gap-4 justify-center">
-                  <button (click)="startGame(3)" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-lg transition-all duration-300 shadow-lg hover:shadow-emerald-500/30 transform hover:scale-105">
-                    Easy (3x3)
-                  </button>
-                  <button (click)="startGame(4)" class="px-6 py-3 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-lg text-lg transition-all duration-300 shadow-lg hover:shadow-sky-500/30 transform hover:scale-105">
-                    Medium (4x4)
-                  </button>
-                  <button (click)="startGame(5)" class="px-6 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg text-lg transition-all duration-300 shadow-lg hover:shadow-red-500/30 transform hover:scale-105">
-                    Hard (5x5)
-                  </button>
-              </div>
-            </div>
-          }
-        }
+          </div>
+        </div>
       </div>
     }
 
@@ -58,13 +54,11 @@
 
     @if (gameState() === 'playing' || gameState() === 'won') {
       <div class="relative w-full" [style.max-width.px]="PUZZLE_DIMENSION">
-        <!-- Canvas for rendering the puzzle -->
         <canvas #puzzleCanvas 
                 (click)="handleCanvasClick($event)"
                 class="rounded-lg shadow-2xl shadow-sky-500/20 w-full h-auto cursor-pointer"
                 [class.cursor-default]="gameState() === 'won'"></canvas>
         
-        <!-- Live preview of the solved puzzle -->
         <div class="preview-container" 
             [class.preview-visible]="showPreview()"
             [class.preview-hidden]="!showPreview()">
@@ -83,7 +77,6 @@
     }
   </div>
 
-  <!-- Win state overlay and confetti -->
   @if (gameState() === 'won') {
     <div class="fixed inset-0 bg-black/70 flex flex-col items-center justify-center backdrop-blur-sm z-10 animate-fade-in">
         <div class="text-center p-8 rounded-lg animate-zoom-in-fade">
@@ -151,17 +144,17 @@
     position: absolute;
     bottom: 1rem;
     right: 1rem;
-    background-color: rgba(30, 41, 59, 0.5); /* bg-slate-800/50 */
+    background-color: rgba(30, 41, 59, 0.5);
     padding: 0.25rem;
     border-radius: 0.5rem;
-    border: 1px solid rgb(51 65 85); /* border-slate-700 */
+    border: 1px solid rgb(51 65 85);
     backdrop-filter: blur(4px);
     box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
     transition: opacity 0.4s ease-in-out, transform 0.4s ease-in-out;
   }
   .preview-hidden {
     opacity: 0;
-    transform: translateY(100%) translateY(1rem); /* Move it down out of view */
+    transform: translateY(100%) translateY(1rem);
     pointer-events: none;
   }
   .preview-visible {
@@ -180,7 +173,7 @@
   
   @keyframes blink-caret {
     from, to { border-color: transparent }
-    50% { border-color: #38bdf8; } /* Tailwind sky-400 */
+    50% { border-color: #38bdf8; }
   }
   .typing-container::after {
     content: '▋';
@@ -188,5 +181,14 @@
     margin-left: 2px;
     font-weight: bold;
     color: #38bdf8;
+  }
+  
+  .difficulty-options {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.5s ease-in-out;
+  }
+  .difficulty-options.open {
+    max-height: 200px;
   }
 </style>
