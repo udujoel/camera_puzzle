@@ -3,20 +3,13 @@ import { GoogleGenAI } from '@google/genai';
 
 const PUZZLE_DIMENSION = 600; // Should be easily divisible by grid sizes (3, 4, 5)
 
+declare var confetti: any;
+
 interface AnimationState {
   index1: number;
   index2: number;
   startTime: number;
   duration: number;
-}
-
-interface ConfettiParticle {
-  left: string;
-  background: string;
-  width: string;
-  height: string;
-  animationDuration: string;
-  animationDelay: string;
 }
 
 interface Score {
@@ -60,7 +53,6 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   isShuffling = signal(false);
   moveCount = signal(0);
   timeTaken = signal(0);
-  confettiParticles = signal<ConfettiParticle[]>([]);
   showGhostHint = signal(false);
   
   // Start screen UI state
@@ -77,13 +69,18 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   hintsRemaining = signal(0);
   shakeHintButton = signal(false);
   showHintTooltip = signal(false);
-  victoryMessage = signal('Congratulations, you unscrambled the view!');
+  
+  // Victory message state
+  victoryMessages = signal<string[]>(['Congratulations, you unscrambled the view!']);
+  displayedVictoryMessage = signal('');
+  
   undoButtonPressed = signal(false);
 
   // Leaderboard and Score
   leaderboard = signal<Leaderboard>({ '3': [], '4': [], '5': [] });
   activeLeaderboardTab = signal<3 | 4 | 5>(3);
   currentScore = signal(0);
+  displayedScore = signal(0);
 
   // Timed Challenge
   puzzlesCleared = signal(0);
@@ -94,6 +91,10 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   // Undo feature
   private moveHistory: WritableSignal<{ index1: number, index2: number }[]> = signal([]);
 
+  // Glow animation state
+  correctTileGlows: WritableSignal<{ [index: number]: number }> = signal({});
+  private readonly GLOW_DURATION = 700; // ms
+
   private stream: MediaStream | null = null;
   private animationFrameId: number | null = null;
   private currentAnimation: AnimationState | null = null;
@@ -101,10 +102,13 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   private hintTimer: any = null;
   private hintTooltipTimer: any = null;
   private typingTimeout: any;
+  private victoryTypingTimeout: any;
   private countdownTimeouts: any[] = [];
   private challengeTimer: any = null;
   private stageClearedTimeout: any = null;
+  private scoreAnimationTimer: any = null;
 
+  // Intro tips animation state
   private tips = [
     "Welcome to the Camera Puzzle!",
     "Unscramble your live camera feed by swapping the tiles.",
@@ -113,6 +117,11 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   ];
   private currentTipIndex = 0;
   private isDeleting = false;
+
+  // Victory message animation state
+  private currentVictoryMessageIndex = 0;
+  private isVictoryMessageDeleting = false;
+  
   private typingSpeed = 50;
   private deletingSpeed = 30;
   
@@ -327,12 +336,29 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     this.stopGame();
     this.selectedTileIndex.set(null);
     this.cameraError.set(null);
-    this.confettiParticles.set([]);
     this.showCustomGameMenu.set(false);
-    this.victoryMessage.set('Congratulations, you unscrambled the view!');
+    this.victoryMessages.set(['Congratulations, you unscrambled the view!']);
     this.gameMode.set(null);
     this.gameState.set('idle');
     this.startTypingAnimation();
+  }
+
+  private clearAllTimers(): void {
+    if (this.hintTimer) clearTimeout(this.hintTimer);
+    if (this.hintTooltipTimer) clearTimeout(this.hintTooltipTimer);
+    if (this.typingTimeout) clearTimeout(this.typingTimeout);
+    if (this.victoryTypingTimeout) clearTimeout(this.victoryTypingTimeout);
+    if (this.challengeTimer) clearInterval(this.challengeTimer);
+    if (this.stageClearedTimeout) clearTimeout(this.stageClearedTimeout);
+    if (this.scoreAnimationTimer) clearInterval(this.scoreAnimationTimer);
+    this.hintTimer = null;
+    this.hintTooltipTimer = null;
+    this.typingTimeout = null;
+    this.victoryTypingTimeout = null;
+    this.challengeTimer = null;
+    this.stageClearedTimeout = null;
+    this.scoreAnimationTimer = null;
+    this.clearCountdownTimeouts();
   }
 
   private clearCountdownTimeouts(): void {
@@ -345,18 +371,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
     }
-    if (this.hintTimer) clearTimeout(this.hintTimer);
-    if (this.hintTooltipTimer) clearTimeout(this.hintTooltipTimer);
-    if (this.typingTimeout) clearTimeout(this.typingTimeout);
-    if (this.challengeTimer) clearInterval(this.challengeTimer);
-    if (this.stageClearedTimeout) clearTimeout(this.stageClearedTimeout);
-    
-    this.hintTimer = null;
-    this.hintTooltipTimer = null;
-    this.challengeTimer = null;
-    this.stageClearedTimeout = null;
-
-    this.clearCountdownTimeouts();
+    this.clearAllTimers();
     this.showGhostHint.set(false);
     this.stream?.getTracks().forEach(track => track.stop());
     this.stream = null;
@@ -514,6 +529,13 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     this.animationFrameId = requestAnimationFrame(this.gameLoop);
   };
   
+  private triggerGlowAnimation(index: number): void {
+    this.correctTileGlows.update(glows => ({
+        ...glows,
+        [index]: performance.now()
+    }));
+  }
+  
   private drawScrambledVideo(): void {
     const canvas = this.puzzleCanvas?.nativeElement;
     const video = this.videoElement.nativeElement;
@@ -539,6 +561,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
       }
       return;
     }
+    // First pass: draw all tiles
     for (let i = 0; i < currentTiles.length; i++) {
       const tileValue = currentTiles[i];
       const sourceCol = tileValue % gridSize;
@@ -566,14 +589,66 @@ export class AppComponent implements OnDestroy, AfterViewInit {
           }
           if (progress >= 1) {
             const tilesCopy = [...currentTiles];
-            [tilesCopy[index1], tilesCopy[index2]] = [tilesCopy[index2], tilesCopy[index1]];
+            const { index1: idx1, index2: idx2 } = this.currentAnimation;
+            [tilesCopy[idx1], tilesCopy[idx2]] = [tilesCopy[idx2], tilesCopy[idx1]];
             this.tiles.set(tilesCopy);
             this.currentAnimation = null;
-            if (!this.isShuffling()) this.checkWinCondition();
+            if (!this.isShuffling()) {
+                if (tilesCopy[idx1] === idx1) this.triggerGlowAnimation(idx1);
+                if (tilesCopy[idx2] === idx2) this.triggerGlowAnimation(idx2);
+                this.checkWinCondition();
+            }
           }
       }
       ctx.drawImage(video, sx + sourceCol * (sourceSize / gridSize), sy + sourceRow * (sourceSize / gridSize), sourceSize / gridSize, sourceSize / gridSize, destX, destY, tileWidth, tileHeight);
     }
+
+    // Second pass: draw highlights and glows
+    const glows = this.correctTileGlows();
+    const now = performance.now();
+    for (const indexStr in glows) {
+        const index = parseInt(indexStr, 10);
+        const destCol = index % gridSize;
+        const destRow = Math.floor(index / gridSize);
+        const startTime = glows[index];
+        const elapsedTime = now - startTime;
+
+        if (elapsedTime < this.GLOW_DURATION) {
+            const progress = elapsedTime / this.GLOW_DURATION;
+            const perimeter = 2 * (tileWidth + tileHeight);
+            const distance = progress * perimeter;
+            let glowX = destCol * tileWidth;
+            let glowY = destRow * tileHeight;
+
+            if (distance < tileWidth) { // Top edge
+                glowX += distance;
+            } else if (distance < tileWidth + tileHeight) { // Right edge
+                glowX += tileWidth;
+                glowY += distance - tileWidth;
+            } else if (distance < 2 * tileWidth + tileHeight) { // Bottom edge
+                glowX += tileWidth - (distance - (tileWidth + tileHeight));
+                glowY += tileHeight;
+            } else { // Left edge
+                glowY += tileHeight - (distance - (2 * tileWidth + tileHeight));
+            }
+            
+            ctx.beginPath();
+            const gradient = ctx.createRadialGradient(glowX, glowY, 2, glowX, glowY, 10);
+            gradient.addColorStop(0, 'rgba(74, 222, 128, 0.8)');
+            gradient.addColorStop(1, 'rgba(74, 222, 128, 0)');
+            ctx.fillStyle = gradient;
+            ctx.arc(glowX, glowY, 10, 0, Math.PI * 2);
+            ctx.fill();
+
+        } else {
+            this.correctTileGlows.update(currentGlows => {
+                const newGlows = {...currentGlows};
+                delete newGlows[index];
+                return newGlows;
+            });
+        }
+    }
+
     const focusedIdx = this.focusedTileIndex();
     if (focusedIdx !== null && focusedIdx !== this.selectedTileIndex() && !this.currentAnimation && this.gameState() === 'playing') {
       const col = focusedIdx % gridSize;
@@ -586,9 +661,23 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     if (selectedIdx !== null && !this.currentAnimation && this.gameState() === 'playing') {
       const col = selectedIdx % gridSize;
       const row = Math.floor(selectedIdx / gridSize);
+      const scale = 1.05;
+      const scaledWidth = tileWidth * scale;
+      const scaledHeight = tileHeight * scale;
+      const destX = col * tileWidth - (scaledWidth - tileWidth) / 2;
+      const destY = row * tileHeight - (scaledHeight - tileHeight) / 2;
+
+      ctx.save();
+      ctx.shadowColor = 'rgba(56, 189, 248, 0.7)';
+      ctx.shadowBlur = 15;
+      const tileValue = currentTiles[selectedIdx];
+      const sourceCol = tileValue % gridSize;
+      const sourceRow = Math.floor(tileValue / gridSize);
+      ctx.drawImage(video, sx + sourceCol * (sourceSize / gridSize), sy + sourceRow * (sourceSize / gridSize), sourceSize / gridSize, sourceSize / gridSize, destX, destY, scaledWidth, scaledHeight);
       ctx.strokeStyle = 'rgba(56, 189, 248, 0.9)';
       ctx.lineWidth = 4;
-      ctx.strokeRect(col * tileWidth + 2, row * tileHeight + 2, tileWidth - 4, tileHeight - 4);
+      ctx.strokeRect(destX + 2, destY + 2, scaledWidth - 4, scaledHeight - 4);
+      ctx.restore();
     }
     if (this.showGhostHint()) {
       ctx.globalAlpha = 0.4;
@@ -620,22 +709,76 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   }
 
   private async generateClassicVictoryMessage(): Promise<void> {
-    this.victoryMessage.set('Congratulations, you unscrambled the view!'); // Fallback
+    this.victoryMessages.set(['Congratulations!', 'Puzzle Solved!', 'Nicely Done!']);
+    this.animateScore();
+    this.runCyclingVictoryMessageAnimation();
     try {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
-        const prompt = `Write a short, witty, one-sentence congratulatory message for a player who solved a ${this.gridSize()}x${this.gridSize()} camera puzzle. Their score was ${this.currentScore()}, they used ${this.moveCount()} moves, and their time was ${this.formattedTime()}. Be creative and fun! Do not include quotation marks.`;
+        const prompt = `Act as a fun game commentator. Write 3 short, unique, witty, one-sentence congratulatory messages for a player who solved a ${this.gridSize()}x${this.gridSize()} camera puzzle. Their score was ${this.currentScore()}, they used ${this.moveCount()} moves, and their time was ${this.formattedTime()}. Be creative and enthusiastic! Format the response as a valid JSON array of strings, like ["Message 1", "Message 2", "Message 3"]. Do not include any other text or markdown.`;
         const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
         let text = response.text;
         if (text) {
-          this.victoryMessage.set(text.trim().replace(/^"|"$/g, ''));
+          const cleanedJson = text.trim().replace(/^```json\s*/, '').replace(/```$/, '');
+          const messages = JSON.parse(cleanedJson);
+          if (Array.isArray(messages) && messages.length > 0) {
+            this.victoryMessages.set(messages.map(m => m.trim().replace(/^"|"$/g, '')));
+            if (this.victoryTypingTimeout) clearTimeout(this.victoryTypingTimeout);
+            this.runCyclingVictoryMessageAnimation();
+          }
         }
     } catch (error) {
-        console.error("Error generating classic victory message:", error);
+        console.error("Error generating or parsing classic victory messages:", error);
     }
   }
 
+  private runCyclingVictoryMessageAnimation(): void {
+    const currentMessage = this.victoryMessages()[this.currentVictoryMessageIndex];
+    const displayedText = this.displayedVictoryMessage();
+    if (this.isVictoryMessageDeleting) {
+      this.displayedVictoryMessage.update(val => val.slice(0, -1));
+      if (displayedText.length > 0) {
+        this.victoryTypingTimeout = setTimeout(() => this.runCyclingVictoryMessageAnimation(), this.deletingSpeed);
+      } else {
+        this.isVictoryMessageDeleting = false;
+        this.currentVictoryMessageIndex = (this.currentVictoryMessageIndex + 1) % this.victoryMessages().length;
+        this.victoryTypingTimeout = setTimeout(() => this.runCyclingVictoryMessageAnimation(), 500);
+      }
+    } else {
+      if (displayedText.length < currentMessage.length) {
+        this.displayedVictoryMessage.update(val => currentMessage.slice(0, val.length + 1));
+        this.victoryTypingTimeout = setTimeout(() => this.runCyclingVictoryMessageAnimation(), this.typingSpeed);
+      } else {
+        this.isVictoryMessageDeleting = true;
+        this.victoryTypingTimeout = setTimeout(() => this.runCyclingVictoryMessageAnimation(), 3000);
+      }
+    }
+  }
+
+  private animateScore(): void {
+    if (this.scoreAnimationTimer) clearInterval(this.scoreAnimationTimer);
+    const finalScore = this.currentScore();
+    this.displayedScore.set(0);
+    if (finalScore === 0) return;
+
+    const duration = 1500; // ms
+    const stepTime = 20; // ms
+    const steps = duration / stepTime;
+    const increment = finalScore / steps;
+    let current = 0;
+
+    this.scoreAnimationTimer = setInterval(() => {
+      current += increment;
+      if (current >= finalScore) {
+        this.displayedScore.set(finalScore);
+        clearInterval(this.scoreAnimationTimer);
+      } else {
+        this.displayedScore.set(Math.ceil(current));
+      }
+    }, stepTime);
+  }
+
   private async generateTimedChallengeSummary(): Promise<void> {
-      this.victoryMessage.set("Great effort! You really raced against the clock."); // Fallback
+      this.victoryMessages.set(["Great effort! You really raced against the clock."]);
       const stats = this.finalTimedStats();
       if (!stats) return;
 
@@ -645,7 +788,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
           const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
           let text = response.text;
           if (text) {
-              this.victoryMessage.set(text.trim().replace(/^"|"$/g, ''));
+              this.victoryMessages.set([text.trim().replace(/^"|"$/g, '')]);
           }
       } catch (error) {
           console.error("Error generating timed challenge summary:", error);
@@ -673,19 +816,25 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   }
 
   private launchConfetti(): void {
-    const particles: ConfettiParticle[] = [];
-    const colors = ['#fde047', '#f97316', '#ec4899', '#8b5cf6', '#3b82f6', '#22c55e'];
-    for (let i = 0; i < 150; i++) {
-      particles.push({
-        left: `${Math.random() * 100}%`,
-        background: colors[Math.floor(Math.random() * colors.length)],
-        width: `${Math.random() * 8 + 6}px`,
-        height: `${Math.random() * 6 + 4}px`,
-        animationDuration: `${Math.random() * 3 + 4}s`,
-        animationDelay: `${Math.random() * 3}s`
-      });
+    const duration = 5 * 1000;
+    const animationEnd = Date.now() + duration;
+    const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 100 };
+
+    function randomInRange(min: number, max: number) {
+      return Math.random() * (max - min) + min;
     }
-    this.confettiParticles.set(particles);
+
+    const interval = setInterval(() => {
+      const timeLeft = animationEnd - Date.now();
+
+      if (timeLeft <= 0) {
+        return clearInterval(interval);
+      }
+
+      const particleCount = 50 * (timeLeft / duration);
+      confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } });
+      confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } });
+    }, 250);
   }
 
   private loadLeaderboard(): void {
