@@ -42,7 +42,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   @ViewChild('videoElement') videoElement!: ElementRef<HTMLVideoElement>;
   @ViewChild('puzzleCanvas') puzzleCanvas?: ElementRef<HTMLCanvasElement>;
 
-  gameState: WritableSignal<'idle' | 'playing' | 'won' | 'error'> = signal('idle');
+  gameState: WritableSignal<'idle' | 'countdown' | 'playing' | 'won' | 'error'> = signal('idle');
   cameraError: WritableSignal<string | null> = signal(null);
   gridSize = signal(3);
   tiles: WritableSignal<number[]> = signal([]);
@@ -55,6 +55,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   showDifficultySelection = signal(false);
   typingState = signal<'pre-typing' | 'typing' | 'done'>('pre-typing');
   displayedInstructionText = signal('');
+  countdownValue = signal<number | string>(3);
 
   // Leaderboard and Score
   leaderboard = signal<Leaderboard>({ '3': [], '4': [], '5': [] });
@@ -67,6 +68,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   private startTime = 0;
   private hintTimer: any = null;
   private typingTimeout: any;
+  private countdownTimeouts: any[] = [];
 
   private tips = [
     "Welcome to the Camera Puzzle!",
@@ -137,20 +139,41 @@ export class AppComponent implements OnDestroy, AfterViewInit {
 
   async startGame(size: number): Promise<void> {
     this.gridSize.set(size);
-    this.gameState.set('playing');
+    // Set to 'playing' to render the canvas, but the countdown will overlay it
+    this.gameState.set('playing'); 
     try {
       this.stream = await navigator.mediaDevices.getUserMedia({ video: { width: PUZZLE_DIMENSION, height: PUZZLE_DIMENSION } });
       const video = this.videoElement.nativeElement;
       video.srcObject = this.stream;
       video.onplaying = () => {
-        this.initializePuzzle();
-        if (this.animationFrameId === null) {
-            this.gameLoop();
+        // Set up the canvas dimensions as soon as the video is ready
+        const canvas = this.puzzleCanvas?.nativeElement;
+        if (canvas) {
+          canvas.width = PUZZLE_DIMENSION;
+          canvas.height = PUZZLE_DIMENSION;
         }
+        if (this.animationFrameId === null) {
+          this.gameLoop(); // Start drawing the solved view
+        }
+        this.startCountdown();
       };
     } catch (err) {
       this.handleCameraError(err);
     }
+  }
+
+  private startCountdown(): void {
+      this.gameState.set('countdown');
+      this.countdownValue.set(3);
+      this.clearCountdownTimeouts();
+
+      this.countdownTimeouts.push(setTimeout(() => this.countdownValue.set(2), 1000));
+      this.countdownTimeouts.push(setTimeout(() => this.countdownValue.set(1), 2000));
+      this.countdownTimeouts.push(setTimeout(() => this.countdownValue.set('Go!'), 3000));
+      this.countdownTimeouts.push(setTimeout(() => {
+        this.gameState.set('playing');
+        this.initializePuzzle();
+      }, 4000));
   }
 
   private initializePuzzle(): void {
@@ -158,16 +181,10 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     const initialTiles = Array.from({ length: gridSize * gridSize }, (_, i) => i);
     this.tiles.set(initialTiles);
 
-    const canvas = this.puzzleCanvas?.nativeElement;
-    if (canvas) {
-      canvas.width = PUZZLE_DIMENSION;
-      canvas.height = PUZZLE_DIMENSION;
-    }
     this.moveCount.set(0);
     this.timeTaken.set(0);
     this.startTime = performance.now();
     this.shuffleTiles();
-    this.peekGhostHint();
   }
   
   restartPuzzle(): void {
@@ -209,6 +226,11 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     this.startTypingAnimation();
   }
 
+  private clearCountdownTimeouts(): void {
+    this.countdownTimeouts.forEach(timeout => clearTimeout(timeout));
+    this.countdownTimeouts = [];
+  }
+
   private stopGame(): void {
     if (this.animationFrameId) {
       cancelAnimationFrame(this.animationFrameId);
@@ -221,6 +243,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     if (this.typingTimeout) {
       clearTimeout(this.typingTimeout);
     }
+    this.clearCountdownTimeouts();
     this.showGhostHint.set(false);
     this.stream?.getTracks().forEach(track => track.stop());
     this.stream = null;
@@ -322,7 +345,10 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   }
 
   private gameLoop = (): void => {
-    this.drawScrambledVideo();
+    // Only draw if we're not idle, to avoid drawing unnecessarily.
+    if (this.gameState() !== 'idle') {
+      this.drawScrambledVideo();
+    }
     this.animationFrameId = requestAnimationFrame(this.gameLoop);
   };
   
@@ -347,6 +373,17 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     const currentTiles = this.tiles();
+
+    // If we're in countdown or won, just draw the solved image
+    if (this.gameState() === 'countdown' || this.gameState() === 'won' || currentTiles.length === 0) {
+      ctx.drawImage(video, sx, sy, sourceSize, sourceSize, 0, 0, canvas.width, canvas.height);
+      if (this.showGhostHint()) {
+        ctx.globalAlpha = 0.4;
+        ctx.drawImage(video, sx, sy, sourceSize, sourceSize, 0, 0, canvas.width, canvas.height);
+        ctx.globalAlpha = 1.0;
+      }
+      return;
+    }
 
     for (let i = 0; i < currentTiles.length; i++) {
       const tileValue = currentTiles[i];

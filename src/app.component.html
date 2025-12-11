@@ -82,15 +82,17 @@
       </div>
     }
 
-    @if (gameState() === 'playing' || gameState() === 'won') {
+    @if (gameState() === 'playing' || gameState() === 'won' || gameState() === 'countdown') {
       <div class="relative w-full" [style.max-width.px]="PUZZLE_DIMENSION">
         <canvas #puzzleCanvas 
                 (click)="handleCanvasClick($event)"
-                class="rounded-lg shadow-2xl shadow-sky-500/20 w-full h-auto cursor-pointer"
-                [class.cursor-default]="gameState() === 'won'"></canvas>
+                class="rounded-lg shadow-2xl shadow-sky-500/20 w-full h-auto"
+                [class.cursor-pointer]="gameState() === 'playing'"
+                [class.cursor-default]="gameState() === 'won' || gameState() === 'countdown'"
+                [class.pointer-events-none]="gameState() !== 'playing'"></canvas>
       </div>
       
-      <div class="flex items-center gap-4 mt-4" [class.invisible]="gameState() === 'won'">
+      <div class="flex items-center gap-4 mt-4" [class.invisible]="gameState() !== 'playing'">
         <button (click)="peekGhostHint()" class="px-6 py-2 bg-sky-700 hover:bg-sky-600 text-sky-100 font-semibold rounded-lg transition-all duration-300">
             Show Hint
         </button>
@@ -103,6 +105,15 @@
       </div>
     }
   </div>
+
+  @if (gameState() === 'countdown') {
+    <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-10">
+      @let value = countdownValue();
+      <div class="text-9xl font-extrabold text-white animate-countdown-pop" [key]="value">
+        {{ value }}
+      </div>
+    </div>
+  }
 
   @if (gameState() === 'won') {
     <div class="fixed inset-0 bg-black/70 flex flex-col items-center justify-center backdrop-blur-sm z-10 animate-fade-in">
@@ -163,6 +174,15 @@
     animation: zoom-in-fade 0.5s ease-in-out forwards;
     animation-delay: 0.2s;
     opacity: 0;
+  }
+
+  @keyframes countdown-pop {
+    0% { transform: scale(0.5); opacity: 0; }
+    50% { transform: scale(1.1); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .animate-countdown-pop {
+    animation: countdown-pop 0.9s ease-in-out;
   }
 
   @keyframes fall-tumble {
