@@ -8,20 +8,16 @@
     <video #videoElement autoplay muted playsinline style="position: absolute; top: -9999px; left: -9999px;"></video>
 
     @if (gameState() === 'idle') {
-      <div class="text-center p-8 bg-slate-800/50 rounded-lg shadow-2xl backdrop-blur-sm border border-slate-700 max-w-lg w-full">
+      <div class="text-center p-8 bg-slate-900/40 rounded-lg shadow-2xl backdrop-blur-md max-w-lg w-full">
         
-        <div class="relative font-mono text-left w-full" style="min-height: 100px;">
-            @if (typingState() === 'pre-typing') {
-              <div class="absolute inset-0 flex items-center justify-center">
-                <span class="blinking-cursor-centered"></span>
-              </div>
-            }
-            <p [class.typing-container]="typingState() === 'typing'"
-               [class.opacity-0]="typingState() === 'pre-typing'">
-              @for(char of instructionChars; track $index) {
-                <span class="animate-typing" [style.animation-delay.ms]="charAnimationDelays[$index]">{{ char }}</span>
-              }
+        <div class="relative flex items-center justify-center font-mono text-center w-full" style="min-height: 120px;">
+          @if (typingState() === 'pre-typing') {
+            <span class="blinking-cursor-centered"></span>
+          } @else {
+            <p class="instruction-text text-center">
+              {{ displayedInstructionText() }}<span class="blinking-cursor-inline" [class.hidden]="typingState() === 'done'"></span>
             </p>
+          }
         </div>
         
         <div class="flex flex-col items-center gap-4 mt-6">
@@ -73,12 +69,15 @@
         </div>
       </div>
       
-      <div class="flex items-center gap-4" [class.invisible]="gameState() === 'won'">
+      <div class="flex items-center gap-4 mt-4" [class.invisible]="gameState() === 'won'">
         <button (click)="peekPreview()" class="px-6 py-2 bg-sky-700 hover:bg-sky-600 text-sky-100 font-semibold rounded-lg transition-all duration-300">
             Show Hint
         </button>
         <button (click)="restartPuzzle()" class="px-6 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold rounded-lg transition-all duration-300">
             Reset Puzzle
+        </button>
+        <button (click)="resetGame()" class="px-4 py-1 bg-transparent border border-red-800 text-red-400 hover:bg-red-800/20 font-semibold rounded-lg transition-all duration-300">
+            End Game
         </button>
       </div>
     }
@@ -168,34 +167,25 @@
     opacity: 1;
     transform: translateY(0);
   }
-
-  @keyframes typing-reveal {
-    from { opacity: 0; }
-    to { opacity: 1; }
-  }
-  .animate-typing {
-    opacity: 0;
-    animation: typing-reveal 0.1s forwards;
-  }
   
-  @keyframes blink-caret-inline {
-    from, to { border-color: transparent }
-    50% { border-color: #38bdf8; }
-  }
-  .typing-container::after {
-    content: '▋';
-    animation: blink-caret-inline 0.75s step-end infinite;
-    margin-left: 2px;
-    font-weight: bold;
-    color: #38bdf8;
-  }
-
   .blinking-cursor-centered {
     display: inline-block;
     width: 3px;
-    height: 1.2em;
+    height: 1.5em; /* Made slightly taller */
     background-color: #38bdf8;
     animation: blink-caret-centered 0.75s step-end infinite;
+    border-radius: 2px;
+  }
+  
+  .blinking-cursor-inline {
+    display: inline-block;
+    width: 3px;
+    height: 1.1em;
+    background-color: #38bdf8;
+    animation: blink-caret-centered 0.75s step-end infinite;
+    border-radius: 2px;
+    margin-left: 2px;
+    vertical-align: text-bottom;
   }
 
   @keyframes blink-caret-centered {

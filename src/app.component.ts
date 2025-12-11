@@ -41,9 +41,8 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   showDifficultySelection = signal(false);
   typingState = signal<'pre-typing' | 'typing' | 'done'>('pre-typing');
   instructionText = "Unscramble your live camera feed! The image will be broken into tiles and shuffled. Click two tiles to swap them until the picture is correct.";
-  instructionChars = this.instructionText.split('');
-  charAnimationDelays: number[] = [];
-  
+  displayedInstructionText = signal('');
+
   private stream: MediaStream | null = null;
   private animationFrameId: number | null = null;
   private currentAnimation: AnimationState | null = null;
@@ -87,20 +86,20 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     }
   }
 
-  private prepareTypingAnimation(): void {
-    this.charAnimationDelays = [];
-    let delay = 0;
-    this.instructionChars.forEach(char => {
-      this.charAnimationDelays.push(delay);
-      delay += 40; // Natural typing speed
-      if (char === ' ' || char === '!' || char === '.') {
-        delay += 200; // Pause after words/sentences for a batch effect
-      }
-    });
-    const totalAnimationDuration = delay + 500; // Total time + buffer
-    this.typingTimeout = setTimeout(() => {
+  private runTypingAnimation(index = 0): void {
+    if (index >= this.instructionText.length) {
       this.typingState.set('done');
-    }, totalAnimationDuration);
+      return;
+    }
+
+    this.displayedInstructionText.update(val => val + this.instructionText[index]);
+    
+    const char = this.instructionText[index];
+    let delay = 50;
+    if (char === '.' || char === '!') delay = 500;
+    if (char === ',') delay = 250;
+
+    this.typingTimeout = setTimeout(() => this.runTypingAnimation(index + 1), delay);
   }
 
   async startGame(size: number): Promise<void> {
@@ -208,13 +207,14 @@ export class AppComponent implements OnDestroy, AfterViewInit {
 
   private startTypingAnimation(): void {
     this.typingState.set('pre-typing');
+    this.displayedInstructionText.set('');
     if (this.typingTimeout) {
       clearTimeout(this.typingTimeout);
     }
     // Wait for 2 blinks (1.5s for 0.75s blink animation)
     this.typingTimeout = setTimeout(() => {
       this.typingState.set('typing');
-      this.prepareTypingAnimation();
+      this.runTypingAnimation();
     }, 1500);
   }
   
@@ -353,7 +353,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
 
           if (i === index1) {
             destX = (startCol1 + (endCol1 - startCol1) * progress) * tileWidth;
-            destY = (startRow1 + (endRow1 - startCol1) * progress) * tileHeight;
+            destY = (startRow1 + (endRow1 - startRow1) * progress) * tileHeight;
           } else if (i === index2) {
             destX = (endCol1 - (endCol1 - startCol1) * progress) * tileWidth;
             destY = (endRow1 - (endRow1 - startRow1) * progress) * tileHeight;
