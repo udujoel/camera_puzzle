@@ -1,4 +1,4 @@
-import { Component, signal, ChangeDetectionStrategy, ViewChild, ElementRef, OnDestroy, WritableSignal, computed } from '@angular/core';
+import { Component, signal, ChangeDetectionStrategy, ViewChild, ElementRef, OnDestroy, WritableSignal, computed, AfterViewInit } from '@angular/core';
 
 const PUZZLE_DIMENSION = 600; // Should be easily divisible by grid sizes (3, 4, 5)
 
@@ -23,7 +23,7 @@ interface ConfettiParticle {
   templateUrl: './app.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class AppComponent implements OnDestroy {
+export class AppComponent implements OnDestroy, AfterViewInit {
   @ViewChild('videoElement') videoElement!: ElementRef<HTMLVideoElement>;
   @ViewChild('puzzleCanvas') puzzleCanvas?: ElementRef<HTMLCanvasElement>;
   @ViewChild('previewCanvas') previewCanvas?: ElementRef<HTMLCanvasElement>;
@@ -38,12 +38,17 @@ export class AppComponent implements OnDestroy {
   timeTaken = signal(0); // in milliseconds
   confettiParticles = signal<ConfettiParticle[]>([]);
   showPreview = signal(false);
-
+  showDifficultySelection = signal(false);
+  isTypingAnimationDone = signal(false);
+  instructionText = "Unscramble your live camera feed! The image will be broken into tiles and shuffled. Click two tiles to swap them until the picture is correct.";
+  instructionChars = this.instructionText.split('');
+  
   private stream: MediaStream | null = null;
   private animationFrameId: number | null = null;
   private currentAnimation: AnimationState | null = null;
   private startTime = 0;
   private previewTimer: any = null;
+  private typingTimeout: any;
   
   public readonly PUZZLE_DIMENSION = PUZZLE_DIMENSION;
 
@@ -67,10 +72,19 @@ export class AppComponent implements OnDestroy {
     // Tile initialization is now done in initializePuzzle()
   }
 
+  ngAfterViewInit(): void {
+    if (this.gameState() === 'idle') {
+      this.startTypingAnimation();
+    }
+  }
+
   ngOnDestroy(): void {
     this.stopGame();
     if (this.previewTimer) {
         clearTimeout(this.previewTimer);
+    }
+    if (this.typingTimeout) {
+      clearTimeout(this.typingTimeout);
     }
   }
 
@@ -148,7 +162,13 @@ export class AppComponent implements OnDestroy {
     this.selectedTileIndex.set(null);
     this.cameraError.set(null);
     this.confettiParticles.set([]);
+    this.showDifficultySelection.set(false);
+    if (this.typingTimeout) {
+      clearTimeout(this.typingTimeout);
+    }
+    this.isTypingAnimationDone.set(false);
     this.gameState.set('idle');
+    this.startTypingAnimation();
   }
 
   private stopGame(): void {
@@ -171,6 +191,13 @@ export class AppComponent implements OnDestroy {
         const previewCtx = this.previewCanvas.nativeElement.getContext('2d');
         previewCtx?.clearRect(0, 0, this.previewCanvas.nativeElement.width, this.previewCanvas.nativeElement.height);
     }
+  }
+
+  private startTypingAnimation(): void {
+    const animationDuration = this.instructionChars.length * 15 + 500; // 15ms per char + 500ms buffer
+    this.typingTimeout = setTimeout(() => {
+      this.isTypingAnimationDone.set(true);
+    }, animationDuration);
   }
   
   private async shuffleTiles(): Promise<void> {

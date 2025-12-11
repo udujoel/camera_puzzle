@@ -10,20 +10,42 @@
     <video #videoElement autoplay muted playsinline style="position: absolute; top: -9999px; left: -9999px;"></video>
 
     @if (gameState() === 'idle') {
-      <div class="text-center p-8 bg-slate-800/50 rounded-lg shadow-2xl backdrop-blur-sm border border-slate-700 max-w-lg">
-        <p class="text-slate-300 mb-6">Unscramble your live camera feed! The image will be broken into tiles and shuffled. Click two tiles to swap them until the picture is correct.</p>
-        <p class="text-slate-100 font-semibold mb-4 text-lg">Choose a difficulty:</p>
-        <div class="flex flex-col sm:flex-row gap-4 justify-center">
-            <button (click)="startGame(3)" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-lg transition-all duration-300 shadow-lg hover:shadow-emerald-500/30 transform hover:scale-105">
-              Easy (3x3)
-            </button>
-            <button (click)="startGame(4)" class="px-6 py-3 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-lg text-lg transition-all duration-300 shadow-lg hover:shadow-sky-500/30 transform hover:scale-105">
-              Medium (4x4)
-            </button>
-            <button (click)="startGame(5)" class="px-6 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg text-lg transition-all duration-300 shadow-lg hover:shadow-red-500/30 transform hover:scale-105">
-              Hard (5x5)
-            </button>
-        </div>
+      <div class="text-center p-8 bg-slate-800/50 rounded-lg shadow-2xl backdrop-blur-sm border border-slate-700 max-w-lg w-full">
+        <p class="text-slate-300 mb-6 font-mono text-left w-full"
+           style="white-space: pre-wrap; min-height: 100px;"
+           [class.typing-container]="!isTypingAnimationDone()">
+          @for(char of instructionChars; track $index) {
+            <span class="animate-typing" [style.animation-delay.ms]="$index * 15">{{ char }}</span>
+          }
+        </p>
+        
+        @if (isTypingAnimationDone()) {
+          @if (!showDifficultySelection()) {
+            <div class="flex flex-col items-center gap-4 animate-fade-in">
+              <button (click)="startGame(3)" class="w-full sm:w-auto px-8 py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-xl transition-all duration-300 shadow-lg hover:shadow-emerald-500/30 transform hover:scale-105">
+                Play
+              </button>
+              <button (click)="showDifficultySelection.set(true)" class="text-sky-400 hover:text-sky-300 font-semibold transition-colors mt-2">
+                Choose Difficulty
+              </button>
+            </div>
+          } @else {
+            <div class="animate-fade-in">
+              <p class="text-slate-100 font-semibold mb-4 text-lg">Choose a difficulty:</p>
+              <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                  <button (click)="startGame(3)" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-lg transition-all duration-300 shadow-lg hover:shadow-emerald-500/30 transform hover:scale-105">
+                    Easy (3x3)
+                  </button>
+                  <button (click)="startGame(4)" class="px-6 py-3 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-lg text-lg transition-all duration-300 shadow-lg hover:shadow-sky-500/30 transform hover:scale-105">
+                    Medium (4x4)
+                  </button>
+                  <button (click)="startGame(5)" class="px-6 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg text-lg transition-all duration-300 shadow-lg hover:shadow-red-500/30 transform hover:scale-105">
+                    Hard (5x5)
+                  </button>
+              </div>
+            </div>
+          }
+        }
       </div>
     }
 
@@ -145,5 +167,26 @@
   .preview-visible {
     opacity: 1;
     transform: translateY(0);
+  }
+
+  @keyframes typing-reveal {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  .animate-typing {
+    opacity: 0;
+    animation: typing-reveal 0.1s forwards;
+  }
+  
+  @keyframes blink-caret {
+    from, to { border-color: transparent }
+    50% { border-color: #38bdf8; } /* Tailwind sky-400 */
+  }
+  .typing-container::after {
+    content: '▋';
+    animation: blink-caret 0.75s step-end infinite;
+    margin-left: 2px;
+    font-weight: bold;
+    color: #38bdf8;
   }
 </style>
