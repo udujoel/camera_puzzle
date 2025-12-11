@@ -21,36 +21,62 @@
             }
           </div>
           
-          <div class="flex flex-col items-center gap-4 mt-6">
-            <button (click)="startGame(3)" class="w-full sm:w-auto px-8 py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-xl transition-all duration-300 shadow-lg hover:shadow-emerald-500/30 transform hover:scale-105">
+          <div class="flex flex-col items-center justify-center gap-4 mt-6">
+            <button (click)="startQuickPlay()" class="w-full sm:w-auto px-10 py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-xl transition-all duration-300 shadow-lg hover:shadow-emerald-500/30 transform hover:scale-105">
               Play
             </button>
-            
-            <div>
-              <button (click)="toggleDifficultySelection()" class="text-sky-400 hover:text-sky-300 font-semibold transition-colors mt-2">
-                Choose Difficulty
-              </button>
+            <button (click)="showCustomGameMenu.set(!showCustomGameMenu())" class="text-sky-400 hover:text-sky-300 font-semibold transition-colors mt-2 text-sm">
+              Custom Game
+            </button>
+          </div>
 
-              <div class="difficulty-options" [class.open]="showDifficultySelection()">
-                  <div class="flex flex-col sm:flex-row gap-4 justify-center pt-4">
-                      <button (click)="startGame(3)" class="px-6 py-3 bg-emerald-600/80 hover:bg-emerald-500/80 text-white font-bold rounded-lg text-lg transition-all duration-300 shadow-md transform hover:scale-105">
-                        Easy (3x3)
-                      </button>
-                      <button (click)="startGame(4)" class="px-6 py-3 bg-sky-600/80 hover:bg-sky-500/80 text-white font-bold rounded-lg text-lg transition-all duration-300 shadow-md transform hover:scale-105">
-                        Medium (4x4)
-                      </button>
-                      <button (click)="startGame(5)" class="px-6 py-3 bg-red-600/80 hover:bg-red-500/80 text-white font-bold rounded-lg text-lg transition-all duration-300 shadow-md transform hover:scale-105">
-                        Hard (5x5)
-                      </button>
+          <div class="custom-game-menu" [class.open]="showCustomGameMenu()">
+              <div class="border-t border-slate-700 my-6"></div>
+              
+              <div class="flex flex-col gap-6">
+                <!-- Difficulty -->
+                <div>
+                    <h3 class="text-lg font-semibold text-slate-200 mb-3">Difficulty</h3>
+                    <div class="flex justify-center gap-3">
+                        <button (click)="customDifficulty.set(3)" [class.selected-option]="customDifficulty() === 3" class="option-btn">Easy (3x3)</button>
+                        <button (click)="customDifficulty.set(4)" [class.selected-option]="customDifficulty() === 4" class="option-btn">Medium (4x4)</button>
+                        <button (click)="customDifficulty.set(5)" [class.selected-option]="customDifficulty() === 5" class="option-btn">Hard (5x5)</button>
+                    </div>
+                </div>
+
+                <!-- Mode -->
+                <div>
+                    <h3 class="text-lg font-semibold text-slate-200 mb-3">Mode</h3>
+                    <div class="flex justify-center">
+                        <div class="mode-toggle">
+                            <button (click)="customMode.set('classic')" [class.active]="customMode() === 'classic'">Classic</button>
+                            <button (click)="customMode.set('timed')" [class.active]="customMode() === 'timed'">Timed</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Duration (conditional) -->
+                @if(customMode() === 'timed') {
+                  <div class="animate-fade-in">
+                      <h3 class="text-lg font-semibold text-slate-200 mb-3">Duration</h3>
+                      <div class="flex justify-center gap-3">
+                          <button (click)="customDuration.set(3)" [class.selected-option]="customDuration() === 3" class="option-btn">3 Mins</button>
+                          <button (click)="customDuration.set(5)" [class.selected-option]="customDuration() === 5" class="option-btn">5 Mins</button>
+                          <button (click)="customDuration.set(10)" [class.selected-option]="customDuration() === 10" class="option-btn">10 Mins</button>
+                      </div>
                   </div>
+                }
+
+                <button (click)="startCustomGame()" class="w-full sm:w-auto mx-auto mt-4 px-8 py-3 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-lg text-lg transition-all duration-300 shadow-lg">
+                    Start Custom Game
+                </button>
               </div>
-            </div>
           </div>
         </div>
 
         <!-- Leaderboard at the bottom -->
         <div class="w-full max-w-5xl">
-          <h2 class="text-2xl font-bold text-center text-sky-300 mb-4">Personal Best</h2>
+          <h2 class="text-2xl font-bold text-center text-sky-300 mb-4">Personal Best (Classic)</h2>
           <div class="flex justify-center mb-4 border-b border-slate-700 leaderboard-tabs">
               <button (click)="setActiveLeaderboardTab(3)" [class.active]="activeLeaderboardTab() === 3">Easy</button>
               <button (click)="setActiveLeaderboardTab(4)" [class.active]="activeLeaderboardTab() === 4">Medium</button>
@@ -82,7 +108,24 @@
       </div>
     }
 
-    @if (gameState() === 'playing' || gameState() === 'won' || gameState() === 'countdown') {
+    @if (gameState() === 'playing' || gameState() === 'won' || gameState() === 'countdown' || gameState() === 'stage-cleared' || gameState() === 'times-up') {
+      @if (gameMode() === 'timed') {
+        <div class="w-full max-w-md bg-slate-800/50 p-3 rounded-lg flex justify-between items-center mb-4 text-center">
+            <div>
+                <div class="text-3xl font-bold font-mono"
+                     [class.text-red-500]="challengeTimeRemaining() <= 20000"
+                     [class.large-pulse]="challengeTimeRemaining() <= 5000">
+                    {{ formattedChallengeTime() }}
+                </div>
+                <div class="text-sm text-slate-400">Time Remaining</div>
+            </div>
+             <div>
+                <div class="text-3xl font-bold">{{ puzzlesCleared() }}</div>
+                <div class="text-sm text-slate-400">Puzzles Cleared</div>
+            </div>
+        </div>
+      }
+
       <div class="relative w-full" [style.max-width.px]="PUZZLE_DIMENSION">
         <canvas #puzzleCanvas 
                 (click)="handleCanvasClick($event)"
@@ -90,7 +133,7 @@
                 (mouseleave)="handleCanvasMouseLeave()"
                 class="rounded-lg shadow-2xl shadow-sky-500/20 w-full h-auto"
                 [class.cursor-pointer]="gameState() === 'playing'"
-                [class.cursor-default]="gameState() === 'won' || gameState() === 'countdown'"
+                [class.cursor-default]="gameState() !== 'playing'"
                 [class.pointer-events-none]="gameState() !== 'playing'"></canvas>
       </div>
       
@@ -131,20 +174,18 @@
   @if (gameState() === 'countdown') {
     <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-10">
       @switch (countdownValue()) {
-        @case (3) {
-          <div class="text-9xl font-extrabold text-white animate-countdown-pop">3</div>
-        }
-        @case (2) {
-          <div class="text-9xl font-extrabold text-white animate-countdown-pop">2</div>
-        }
-        @case (1) {
-          <div class="text-9xl font-extrabold text-white animate-countdown-pop">1</div>
-        }
-        @case ('Go!') {
-          <div class="text-9xl font-extrabold text-white animate-countdown-pop">Go!</div>
-        }
+        @case (3) { <div class="text-9xl font-extrabold text-white animate-countdown-pop">3</div> }
+        @case (2) { <div class="text-9xl font-extrabold text-white animate-countdown-pop">2</div> }
+        @case (1) { <div class="text-9xl font-extrabold text-white animate-countdown-pop">1</div> }
+        @case ('Go!') { <div class="text-9xl font-extrabold text-white animate-countdown-pop">Go!</div> }
       }
     </div>
+  }
+
+  @if (gameState() === 'stage-cleared') {
+      <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-10 animate-fade-in">
+          <h2 class="text-6xl font-extrabold text-white animate-countdown-pop">Stage Cleared!</h2>
+      </div>
   }
 
   @if (gameState() === 'won') {
@@ -187,6 +228,37 @@
       }
     </div>
   }
+
+  @if (gameState() === 'times-up' && finalTimedStats(); as stats) {
+    <div class="fixed inset-0 bg-black/70 flex flex-col items-center justify-center backdrop-blur-sm z-10 animate-fade-in">
+        <div class="text-center p-8 rounded-lg animate-zoom-in-fade">
+            <h2 class="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-orange-400 mb-2">Time's Up!</h2>
+            <p class="text-slate-200 mb-6 italic max-w-2xl mx-auto">{{ victoryMessage() }}</p>
+            <div class="flex gap-8 justify-center items-center mb-8 text-slate-300">
+                <div>
+                    <div class="text-4xl font-bold text-yellow-400">{{ stats.puzzlesCleared }}</div>
+                    <div class="text-sm">Puzzles Cleared</div>
+                </div>
+                <div>
+                    <div class="text-3xl font-bold text-sky-400">{{ stats.totalMoves }}</div>
+                    <div class="text-sm">Total Moves</div>
+                </div>
+                <div>
+                    <div class="text-3xl font-bold text-sky-400 text-center">{{ averageTimePerPuzzle() }}</div>
+                    <div class="text-sm text-center">Avg Time / Puzzle</div>
+                </div>
+            </div>
+            <div class="flex justify-center gap-4">
+              <button (click)="resetGame()" class="px-8 py-3 bg-sky-500 hover:bg-sky-400 text-slate-900 font-bold rounded-lg transition-transform duration-300 hover:scale-105 text-lg">
+                  Try Again
+              </button>
+              <button (click)="resetGame()" class="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold rounded-lg transition-transform duration-300 hover:scale-105">
+                  Main Menu
+              </button>
+            </div>
+        </div>
+    </div>
+  }
 </main>
 
 <style>
@@ -227,6 +299,44 @@
       opacity: 0;
     }
   }
+  
+  .option-btn {
+      padding: 0.5rem 1rem;
+      border: 2px solid #334155; /* slate-700 */
+      border-radius: 0.5rem;
+      transition: all 0.2s ease-in-out;
+      font-weight: 600;
+  }
+  .option-btn:hover {
+      background-color: #475569; /* slate-600 */
+      border-color: #64748b; /* slate-500 */
+  }
+  .option-btn.selected-option {
+      background-color: #0ea5e9; /* sky-500 */
+      border-color: #38bdf8; /* sky-400 */
+      color: white;
+  }
+
+  .mode-toggle {
+    display: flex;
+    background-color: #1e293b; /* slate-800 */
+    border-radius: 999px;
+    padding: 0.25rem;
+  }
+  .mode-toggle button {
+    padding: 0.5rem 1.5rem;
+    border: none;
+    background: none;
+    color: #94a3b8; /* slate-400 */
+    font-weight: 600;
+    border-radius: 999px;
+    transition: color 0.3s ease;
+  }
+  .mode-toggle button.active {
+    background-color: #38bdf8; /* sky-400 */
+    color: #ffffff;
+    box-shadow: 0 2px 10px rgba(56, 189, 248, 0.3);
+  }
 
   .blinking-cursor-centered {
     display: inline-block;
@@ -253,13 +363,15 @@
     50% { background-color: transparent; }
   }
   
-  .difficulty-options {
+  .custom-game-menu {
     max-height: 0;
     overflow: hidden;
-    transition: max-height 0.5s ease-in-out;
+    transition: max-height 0.6s ease-in-out, opacity 0.6s ease-in-out;
+    opacity: 0;
   }
-  .difficulty-options.open {
-    max-height: 200px;
+  .custom-game-menu.open {
+    max-height: 500px;
+    opacity: 1;
   }
 
   .leaderboard-tabs button {
@@ -337,4 +449,13 @@
   .animate-press {
       animation: press-effect 0.2s ease-in-out;
   }
+
+  @keyframes pulse-large {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.15); }
+  }
+  .large-pulse {
+      animation: pulse-large 1s infinite;
+  }
+
 </style>
