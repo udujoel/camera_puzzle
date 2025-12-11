@@ -1,4 +1,5 @@
 import { Component, signal, ChangeDetectionStrategy, ViewChild, ElementRef, OnDestroy, WritableSignal, computed, AfterViewInit } from '@angular/core';
+import { GoogleGenAI } from '@google/genai';
 
 const PUZZLE_DIMENSION = 600; // Should be easily divisible by grid sizes (3, 4, 5)
 
@@ -57,6 +58,9 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   typingState = signal<'pre-typing' | 'typing' | 'done'>('pre-typing');
   displayedInstructionText = signal('');
   countdownValue = signal<number | string>(3);
+  hintsRemaining = signal(0);
+  shakeHintButton = signal(false);
+  victoryMessage = signal('Congratulations, you unscrambled the view!');
 
   // Leaderboard and Score
   leaderboard = signal<Leaderboard>({ '3': [], '4': [], '5': [] });
@@ -182,6 +186,10 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     const initialTiles = Array.from({ length: gridSize * gridSize }, (_, i) => i);
     this.tiles.set(initialTiles);
 
+    if (gridSize === 3) this.hintsRemaining.set(5);
+    else if (gridSize === 4) this.hintsRemaining.set(4);
+    else this.hintsRemaining.set(3);
+
     this.moveCount.set(0);
     this.timeTaken.set(0);
     this.startTime = performance.now();
@@ -194,11 +202,17 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   }
 
   peekGhostHint(): void {
-    if (this.hintTimer) {
-        clearTimeout(this.hintTimer);
+    if (this.hintsRemaining() > 0) {
+        if (this.hintTimer) {
+            clearTimeout(this.hintTimer);
+        }
+        this.showGhostHint.set(true);
+        this.hintsRemaining.update(h => h - 1);
+        this.hintTimer = setTimeout(() => this.showGhostHint.set(false), 2500);
+    } else {
+        this.shakeHintButton.set(true);
+        setTimeout(() => this.shakeHintButton.set(false), 500);
     }
-    this.showGhostHint.set(true);
-    this.hintTimer = setTimeout(() => this.showGhostHint.set(false), 2500);
   }
 
   private handleCameraError(err: unknown): void {
@@ -223,6 +237,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     this.cameraError.set(null);
     this.confettiParticles.set([]);
     this.showDifficultySelection.set(false);
+    this.victoryMessage.set('Congratulations, you unscrambled the view!');
     this.gameState.set('idle');
     this.startTypingAnimation();
   }
@@ -516,7 +531,27 @@ export class AppComponent implements OnDestroy, AfterViewInit {
       this.timeTaken.set(timeTakenMs);
       this.calculateAndSaveScore(timeTakenMs);
       this.gameState.set('won');
+      this.generateVictoryMessage();
       this.launchConfetti();
+    }
+  }
+
+  private async generateVictoryMessage(): Promise<void> {
+    try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+        const prompt = `Write a short, witty, one-sentence congratulatory message for a player who solved a ${this.gridSize()}x${this.gridSize()} camera puzzle. Their score was ${this.currentScore()}, they used ${this.moveCount()} moves, and their time was ${this.formattedTime()}. Be creative and fun!`;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+        });
+        const text = response.text;
+        if (text) {
+          this.victoryMessage.set(text.trim());
+        }
+    } catch (error) {
+        console.error("Error generating victory message:", error);
+        // Fallback message is already set in the signal's initial value
     }
   }
 

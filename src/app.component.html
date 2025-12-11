@@ -95,9 +95,19 @@
       </div>
       
       <div class="flex items-center gap-4 mt-4" [class.invisible]="gameState() !== 'playing'">
-        <button (click)="peekGhostHint()" class="px-6 py-2 bg-sky-700 hover:bg-sky-600 text-sky-100 font-semibold rounded-lg transition-all duration-300">
-            Show Hint
-        </button>
+        <div class="relative">
+            <button (click)="peekGhostHint()" 
+                    [disabled]="hintsRemaining() <= 0"
+                    [class.opacity-50]="hintsRemaining() <= 0"
+                    [class.cursor-not-allowed]="hintsRemaining() <= 0"
+                    [class.animate-shake-flash]="shakeHintButton()"
+                    class="px-6 py-2 bg-sky-700 hover:bg-sky-600 text-sky-100 font-semibold rounded-lg transition-all duration-300 border-2 border-transparent">
+                Show Hint
+            </button>
+            <span class="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center border-2 border-slate-900">
+                {{ hintsRemaining() }}
+            </span>
+        </div>
         <button (click)="restartPuzzle()" class="px-6 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold rounded-lg transition-all duration-300">
             Reset Puzzle
         </button>
@@ -121,7 +131,7 @@
     <div class="fixed inset-0 bg-black/70 flex flex-col items-center justify-center backdrop-blur-sm z-10 animate-fade-in">
         <div class="text-center p-8 rounded-lg animate-zoom-in-fade">
             <h2 class="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-orange-400 mb-2">You Win!</h2>
-            <p class="text-slate-200 mb-6">Congratulations, you unscrambled the view!</p>
+            <p class="text-slate-200 mb-6 italic">"{{ victoryMessage() }}"</p>
             <div class="flex gap-8 justify-center items-center mb-8 text-slate-300">
                 <div>
                     <div class="text-4xl font-bold text-yellow-400">{{ currentScore().toLocaleString() }}</div>
@@ -280,5 +290,14 @@
     color: #cbd5e1;
     font-size: 0.75rem;
     font-family: monospace;
+  }
+
+  @keyframes shake-flash {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); border-color: #f87171; } /* red-400 */
+    20%, 40%, 60%, 80% { transform: translateX(4px); }
+  }
+  .animate-shake-flash {
+    animation: shake-flash 0.5s ease-in-out;
   }
 </style>
