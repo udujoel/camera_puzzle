@@ -62,6 +62,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   shakeHintButton = signal(false);
   showHintTooltip = signal(false);
   victoryMessage = signal('Congratulations, you unscrambled the view!');
+  undoButtonPressed = signal(false);
 
   // Leaderboard and Score
   leaderboard = signal<Leaderboard>({ '3': [], '4': [], '5': [] });
@@ -388,27 +389,30 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     const gridSize = this.gridSize();
     let currentFocus = this.focusedTileIndex() ?? 0;
 
+    let row = Math.floor(currentFocus / gridSize);
+    let col = currentFocus % gridSize;
+
     switch (event.key) {
       case 'ArrowUp':
-        currentFocus = (currentFocus - gridSize + gridSize * gridSize) % (gridSize * gridSize);
+        row = Math.max(0, row - 1);
         break;
       case 'ArrowDown':
-        currentFocus = (currentFocus + gridSize) % (gridSize * gridSize);
+        row = Math.min(gridSize - 1, row + 1);
         break;
       case 'ArrowLeft':
-        currentFocus = (currentFocus % gridSize === 0) ? currentFocus + gridSize - 1 : currentFocus - 1;
+        col = Math.max(0, col - 1);
         break;
       case 'ArrowRight':
-        currentFocus = ((currentFocus + 1) % gridSize === 0) ? currentFocus - gridSize + 1 : currentFocus + 1;
+        col = Math.min(gridSize - 1, col + 1);
         break;
       case 'Enter':
       case ' ':
         this.handleTileInteraction(currentFocus);
-        return;
+        return; // Don't update focus on interaction
       default:
-        return;
+        return; // Ignore other keys
     }
-    this.focusedTileIndex.set(currentFocus);
+    this.focusedTileIndex.set(row * gridSize + col);
   }
 
   handleCanvasMouseMove(event: MouseEvent): void {
@@ -449,19 +453,21 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   undoLastMove(): void {
     if (this.moveHistory().length === 0 || this.currentAnimation) return;
 
+    this.undoButtonPressed.set(true);
+    setTimeout(() => this.undoButtonPressed.set(false), 200);
+
     const newHistory = [...this.moveHistory()];
     const lastMove = newHistory.pop();
     if (!lastMove) return;
 
     this.moveHistory.set(newHistory);
-    this.moveCount.update(c => c - 1);
+    this.moveCount.update(c => c > 0 ? c - 1 : 0);
     
-    // Perform an instantaneous swap without animation for simplicity
-    this.tiles.update(currentTiles => {
-      const tilesCopy = [...currentTiles];
-      [tilesCopy[lastMove.index1], tilesCopy[lastMove.index2]] = [tilesCopy[lastMove.index2], tilesCopy[lastMove.index1]];
-      return tilesCopy;
-    });
+    // Perform an instant swap without animation to make Undo responsive.
+    const tilesCopy = [...this.tiles()];
+    const { index1, index2 } = lastMove;
+    [tilesCopy[index1], tilesCopy[index2]] = [tilesCopy[index2], tilesCopy[index1]];
+    this.tiles.set(tilesCopy);
   }
 
   private gameLoop = (): void => {
