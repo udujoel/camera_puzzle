@@ -86,6 +86,8 @@
       <div class="relative w-full" [style.max-width.px]="PUZZLE_DIMENSION">
         <canvas #puzzleCanvas 
                 (click)="handleCanvasClick($event)"
+                (mousemove)="handleCanvasMouseMove($event)"
+                (mouseleave)="handleCanvasMouseLeave()"
                 class="rounded-lg shadow-2xl shadow-sky-500/20 w-full h-auto"
                 [class.cursor-pointer]="gameState() === 'playing'"
                 [class.cursor-default]="gameState() === 'won' || gameState() === 'countdown'"

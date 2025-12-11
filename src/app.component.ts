@@ -47,6 +47,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   gridSize = signal(3);
   tiles: WritableSignal<number[]> = signal([]);
   selectedTileIndex: WritableSignal<number | null> = signal(null);
+  hoveredTileIndex: WritableSignal<number | null> = signal(null);
   isShuffling = signal(false);
   moveCount = signal(0);
   timeTaken = signal(0);
@@ -340,6 +341,37 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     }
   }
 
+  handleCanvasMouseMove(event: MouseEvent): void {
+    if (this.gameState() !== 'playing') {
+      this.hoveredTileIndex.set(null);
+      return;
+    }
+
+    const canvas = this.puzzleCanvas?.nativeElement;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    const gridSize = this.gridSize();
+
+    const tileWidth = canvas.width / gridSize;
+    const tileHeight = canvas.height / gridSize;
+    const col = Math.floor(x / tileWidth);
+    const row = Math.floor(y / tileHeight);
+    const hoveredIndex = row * gridSize + col;
+
+    if (hoveredIndex >= 0 && hoveredIndex < gridSize * gridSize) {
+      this.hoveredTileIndex.set(hoveredIndex);
+    } else {
+      this.hoveredTileIndex.set(null);
+    }
+  }
+
+  handleCanvasMouseLeave(): void {
+    this.hoveredTileIndex.set(null);
+  }
+
   private swapTiles(index1: number, index2: number, duration: number): void {
     this.currentAnimation = { index1, index2, startTime: performance.now(), duration };
   }
@@ -439,6 +471,15 @@ export class AppComponent implements OnDestroy, AfterViewInit {
         tileWidth,
         tileHeight
       );
+    }
+
+    const hoveredIdx = this.hoveredTileIndex();
+    if (hoveredIdx !== null && hoveredIdx !== this.selectedTileIndex() && !this.currentAnimation && this.gameState() === 'playing') {
+      const col = hoveredIdx % gridSize;
+      const row = Math.floor(hoveredIdx / gridSize);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(col * tileWidth + 1, row * tileHeight + 1, tileWidth - 2, tileHeight - 2);
     }
 
     const selectedIdx = this.selectedTileIndex();
