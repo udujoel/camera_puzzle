@@ -48,7 +48,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   gridSize = signal(3);
   tiles: WritableSignal<number[]> = signal([]);
   selectedTileIndex: WritableSignal<number | null> = signal(null);
-  hoveredTileIndex: WritableSignal<number | null> = signal(null);
+  focusedTileIndex: WritableSignal<number | null> = signal(null);
   isShuffling = signal(false);
   moveCount = signal(0);
   timeTaken = signal(0);
@@ -67,6 +67,9 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   leaderboard = signal<Leaderboard>({ '3': [], '4': [], '5': [] });
   activeLeaderboardTab = signal<3 | 4 | 5>(3);
   currentScore = signal(0);
+
+  // Undo feature
+  private moveHistory: WritableSignal<{ index1: number, index2: number }[]> = signal([]);
 
   private stream: MediaStream | null = null;
   private animationFrameId: number | null = null;
@@ -194,6 +197,8 @@ export class AppComponent implements OnDestroy, AfterViewInit {
 
     this.moveCount.set(0);
     this.timeTaken.set(0);
+    this.moveHistory.set([]);
+    this.focusedTileIndex.set(0);
     this.startTime = performance.now();
     this.shuffleTiles();
   }
@@ -358,21 +363,57 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     const row = Math.floor(y / tileHeight);
     const clickedIndex = row * gridSize + col;
     
+    this.handleTileInteraction(clickedIndex);
+  }
+
+  private handleTileInteraction(interactedIndex: number): void {
     const selectedIdx = this.selectedTileIndex();
     if (selectedIdx === null) {
-      this.selectedTileIndex.set(clickedIndex);
+      this.selectedTileIndex.set(interactedIndex);
     } else {
-      if (selectedIdx !== clickedIndex) {
+      if (selectedIdx !== interactedIndex) {
+        this.moveHistory.update(history => [...history, { index1: selectedIdx, index2: interactedIndex }]);
         this.moveCount.update(c => c + 1);
-        this.swapTiles(selectedIdx, clickedIndex, 200);
+        this.swapTiles(selectedIdx, interactedIndex, 200);
       }
       this.selectedTileIndex.set(null);
     }
   }
 
+  handleKeyDown(event: KeyboardEvent): void {
+    if (this.gameState() !== 'playing' || this.isShuffling() || this.currentAnimation) return;
+
+    event.preventDefault();
+
+    const gridSize = this.gridSize();
+    let currentFocus = this.focusedTileIndex() ?? 0;
+
+    switch (event.key) {
+      case 'ArrowUp':
+        currentFocus = (currentFocus - gridSize + gridSize * gridSize) % (gridSize * gridSize);
+        break;
+      case 'ArrowDown':
+        currentFocus = (currentFocus + gridSize) % (gridSize * gridSize);
+        break;
+      case 'ArrowLeft':
+        currentFocus = (currentFocus % gridSize === 0) ? currentFocus + gridSize - 1 : currentFocus - 1;
+        break;
+      case 'ArrowRight':
+        currentFocus = ((currentFocus + 1) % gridSize === 0) ? currentFocus - gridSize + 1 : currentFocus + 1;
+        break;
+      case 'Enter':
+      case ' ':
+        this.handleTileInteraction(currentFocus);
+        return;
+      default:
+        return;
+    }
+    this.focusedTileIndex.set(currentFocus);
+  }
+
   handleCanvasMouseMove(event: MouseEvent): void {
     if (this.gameState() !== 'playing') {
-      this.hoveredTileIndex.set(null);
+      this.focusedTileIndex.set(null);
       return;
     }
 
@@ -391,18 +432,36 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     const hoveredIndex = row * gridSize + col;
 
     if (hoveredIndex >= 0 && hoveredIndex < gridSize * gridSize) {
-      this.hoveredTileIndex.set(hoveredIndex);
+      this.focusedTileIndex.set(hoveredIndex);
     } else {
-      this.hoveredTileIndex.set(null);
+      this.focusedTileIndex.set(null);
     }
   }
 
   handleCanvasMouseLeave(): void {
-    this.hoveredTileIndex.set(null);
+    this.focusedTileIndex.set(null);
   }
 
   private swapTiles(index1: number, index2: number, duration: number): void {
     this.currentAnimation = { index1, index2, startTime: performance.now(), duration };
+  }
+
+  undoLastMove(): void {
+    if (this.moveHistory().length === 0 || this.currentAnimation) return;
+
+    const newHistory = [...this.moveHistory()];
+    const lastMove = newHistory.pop();
+    if (!lastMove) return;
+
+    this.moveHistory.set(newHistory);
+    this.moveCount.update(c => c - 1);
+    
+    // Perform an instantaneous swap without animation for simplicity
+    this.tiles.update(currentTiles => {
+      const tilesCopy = [...currentTiles];
+      [tilesCopy[lastMove.index1], tilesCopy[lastMove.index2]] = [tilesCopy[lastMove.index2], tilesCopy[lastMove.index1]];
+      return tilesCopy;
+    });
   }
 
   private gameLoop = (): void => {
@@ -502,10 +561,10 @@ export class AppComponent implements OnDestroy, AfterViewInit {
       );
     }
 
-    const hoveredIdx = this.hoveredTileIndex();
-    if (hoveredIdx !== null && hoveredIdx !== this.selectedTileIndex() && !this.currentAnimation && this.gameState() === 'playing') {
-      const col = hoveredIdx % gridSize;
-      const row = Math.floor(hoveredIdx / gridSize);
+    const focusedIdx = this.focusedTileIndex();
+    if (focusedIdx !== null && focusedIdx !== this.selectedTileIndex() && !this.currentAnimation && this.gameState() === 'playing') {
+      const col = focusedIdx % gridSize;
+      const row = Math.floor(focusedIdx / gridSize);
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
       ctx.lineWidth = 2;
       ctx.strokeRect(col * tileWidth + 1, row * tileHeight + 1, tileWidth - 2, tileHeight - 2);
@@ -553,15 +612,17 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   private async generateVictoryMessage(): Promise<void> {
     try {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
-        const prompt = `Write a short, witty, one-sentence congratulatory message for a player who solved a ${this.gridSize()}x${this.gridSize()} camera puzzle. Their score was ${this.currentScore()}, they used ${this.moveCount()} moves, and their time was ${this.formattedTime()}. Be creative and fun!`;
+        const prompt = `Write a short, witty, one-sentence congratulatory message for a player who solved a ${this.gridSize()}x${this.gridSize()} camera puzzle. Their score was ${this.currentScore()}, they used ${this.moveCount()} moves, and their time was ${this.formattedTime()}. Be creative and fun! Do not include quotation marks.`;
 
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
         });
-        const text = response.text;
+        let text = response.text;
         if (text) {
-          this.victoryMessage.set(text.trim());
+          // Remove leading/trailing quotes just in case
+          text = text.trim().replace(/^"|"$/g, '');
+          this.victoryMessage.set(text);
         }
     } catch (error) {
         console.error("Error generating victory message:", error);
