@@ -60,6 +60,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   countdownValue = signal<number | string>(3);
   hintsRemaining = signal(0);
   shakeHintButton = signal(false);
+  showHintTooltip = signal(false);
   victoryMessage = signal('Congratulations, you unscrambled the view!');
 
   // Leaderboard and Score
@@ -72,6 +73,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   private currentAnimation: AnimationState | null = null;
   private startTime = 0;
   private hintTimer: any = null;
+  private hintTooltipTimer: any = null;
   private typingTimeout: any;
   private countdownTimeouts: any[] = [];
 
@@ -210,8 +212,16 @@ export class AppComponent implements OnDestroy, AfterViewInit {
         this.hintsRemaining.update(h => h - 1);
         this.hintTimer = setTimeout(() => this.showGhostHint.set(false), 2500);
     } else {
+        // Shake effect
         this.shakeHintButton.set(true);
         setTimeout(() => this.shakeHintButton.set(false), 500);
+
+        // Tooltip effect
+        if (this.hintTooltipTimer) {
+          clearTimeout(this.hintTooltipTimer);
+        }
+        this.showHintTooltip.set(true);
+        this.hintTooltipTimer = setTimeout(() => this.showHintTooltip.set(false), 2000);
     }
   }
 
@@ -255,6 +265,10 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     if (this.hintTimer) {
         clearTimeout(this.hintTimer);
         this.hintTimer = null;
+    }
+    if (this.hintTooltipTimer) {
+        clearTimeout(this.hintTooltipTimer);
+        this.hintTooltipTimer = null;
     }
     if (this.typingTimeout) {
       clearTimeout(this.typingTimeout);
