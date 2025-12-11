@@ -41,7 +41,6 @@ const LEADERBOARD_KEY = 'camera-puzzle-leaderboard';
 export class AppComponent implements OnDestroy, AfterViewInit {
   @ViewChild('videoElement') videoElement!: ElementRef<HTMLVideoElement>;
   @ViewChild('puzzleCanvas') puzzleCanvas?: ElementRef<HTMLCanvasElement>;
-  @ViewChild('previewCanvas') previewCanvas?: ElementRef<HTMLCanvasElement>;
 
   gameState: WritableSignal<'idle' | 'playing' | 'won' | 'error'> = signal('idle');
   cameraError: WritableSignal<string | null> = signal(null);
@@ -52,7 +51,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   moveCount = signal(0);
   timeTaken = signal(0);
   confettiParticles = signal<ConfettiParticle[]>([]);
-  showPreview = signal(false);
+  showGhostHint = signal(false);
   showDifficultySelection = signal(false);
   typingState = signal<'pre-typing' | 'typing' | 'done'>('pre-typing');
   displayedInstructionText = signal('');
@@ -66,7 +65,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   private animationFrameId: number | null = null;
   private currentAnimation: AnimationState | null = null;
   private startTime = 0;
-  private previewTimer: any = null;
+  private hintTimer: any = null;
   private typingTimeout: any;
 
   private tips = [
@@ -160,20 +159,15 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     this.tiles.set(initialTiles);
 
     const canvas = this.puzzleCanvas?.nativeElement;
-    const previewCanvas = this.previewCanvas?.nativeElement;
     if (canvas) {
       canvas.width = PUZZLE_DIMENSION;
       canvas.height = PUZZLE_DIMENSION;
-    }
-    if (previewCanvas) {
-        previewCanvas.width = 120;
-        previewCanvas.height = 120;
     }
     this.moveCount.set(0);
     this.timeTaken.set(0);
     this.startTime = performance.now();
     this.shuffleTiles();
-    this.peekPreview();
+    this.peekGhostHint();
   }
   
   restartPuzzle(): void {
@@ -181,12 +175,12 @@ export class AppComponent implements OnDestroy, AfterViewInit {
       this.initializePuzzle();
   }
 
-  peekPreview(): void {
-    if (this.previewTimer) {
-        clearTimeout(this.previewTimer);
+  peekGhostHint(): void {
+    if (this.hintTimer) {
+        clearTimeout(this.hintTimer);
     }
-    this.showPreview.set(true);
-    this.previewTimer = setTimeout(() => this.showPreview.set(false), 2500);
+    this.showGhostHint.set(true);
+    this.hintTimer = setTimeout(() => this.showGhostHint.set(false), 2500);
   }
 
   private handleCameraError(err: unknown): void {
@@ -220,23 +214,18 @@ export class AppComponent implements OnDestroy, AfterViewInit {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
     }
-    if (this.previewTimer) {
-        clearTimeout(this.previewTimer);
-        this.previewTimer = null;
+    if (this.hintTimer) {
+        clearTimeout(this.hintTimer);
+        this.hintTimer = null;
     }
     if (this.typingTimeout) {
       clearTimeout(this.typingTimeout);
     }
-    this.showPreview.set(false);
+    this.showGhostHint.set(false);
     this.stream?.getTracks().forEach(track => track.stop());
     this.stream = null;
     this.tiles.set([]);
     this.isShuffling.set(false);
-    
-    if(this.previewCanvas) {
-        const previewCtx = this.previewCanvas.nativeElement.getContext('2d');
-        previewCtx?.clearRect(0, 0, this.previewCanvas.nativeElement.width, this.previewCanvas.nativeElement.height);
-    }
   }
 
   private startTypingAnimation(): void {
@@ -334,9 +323,6 @@ export class AppComponent implements OnDestroy, AfterViewInit {
 
   private gameLoop = (): void => {
     this.drawScrambledVideo();
-    if(this.gameState() === 'playing') {
-      this.drawPreview();
-    }
     this.animationFrameId = requestAnimationFrame(this.gameLoop);
   };
   
@@ -427,33 +413,22 @@ export class AppComponent implements OnDestroy, AfterViewInit {
       ctx.lineWidth = 4;
       ctx.strokeRect(col * tileWidth + 2, row * tileHeight + 2, tileWidth - 4, tileHeight - 4);
     }
-  }
 
-  private drawPreview(): void {
-    const previewCanvas = this.previewCanvas?.nativeElement;
-    const video = this.videoElement.nativeElement;
-    if (!previewCanvas || !video || video.readyState < video.HAVE_METADATA) return;
-    
-    const ctx = previewCanvas.getContext('2d');
-    if (!ctx) return;
-
-    const videoWidth = video.videoWidth;
-    const videoHeight = video.videoHeight;
-    const sourceSize = Math.min(videoWidth, videoHeight);
-    const sx = (videoWidth - sourceSize) / 2;
-    const sy = (videoHeight - sourceSize) / 2;
-
-    ctx.drawImage(
-      video,
-      sx,
-      sy,
-      sourceSize,
-      sourceSize,
-      0,
-      0,
-      previewCanvas.width,
-      previewCanvas.height
-    );
+    if (this.showGhostHint()) {
+      ctx.globalAlpha = 0.4; // Make it semi-transparent
+      ctx.drawImage(
+        video,
+        sx,
+        sy,
+        sourceSize,
+        sourceSize,
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      );
+      ctx.globalAlpha = 1.0; // Reset alpha for subsequent frames
+    }
   }
 
   private checkWinCondition(): void {

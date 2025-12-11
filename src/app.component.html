@@ -88,16 +88,10 @@
                 (click)="handleCanvasClick($event)"
                 class="rounded-lg shadow-2xl shadow-sky-500/20 w-full h-auto cursor-pointer"
                 [class.cursor-default]="gameState() === 'won'"></canvas>
-        
-        <div class="preview-container" 
-            [class.preview-visible]="showPreview()"
-            [class.preview-hidden]="!showPreview()">
-          <canvas #previewCanvas width="120" height="120" class="rounded-md"></canvas>
-        </div>
       </div>
       
       <div class="flex items-center gap-4 mt-4" [class.invisible]="gameState() === 'won'">
-        <button (click)="peekPreview()" class="px-6 py-2 bg-sky-700 hover:bg-sky-600 text-sky-100 font-semibold rounded-lg transition-all duration-300">
+        <button (click)="peekGhostHint()" class="px-6 py-2 bg-sky-700 hover:bg-sky-600 text-sky-100 font-semibold rounded-lg transition-all duration-300">
             Show Hint
         </button>
         <button (click)="restartPuzzle()" class="px-6 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold rounded-lg transition-all duration-300">
@@ -182,28 +176,6 @@
     }
   }
 
-  .preview-container {
-    position: absolute;
-    bottom: 1rem;
-    right: 1rem;
-    background-color: rgba(30, 41, 59, 0.5);
-    padding: 0.25rem;
-    border-radius: 0.5rem;
-    border: 1px solid rgb(51 65 85);
-    backdrop-filter: blur(4px);
-    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-    transition: opacity 0.4s ease-in-out, transform 0.4s ease-in-out;
-  }
-  .preview-hidden {
-    opacity: 0;
-    transform: translateY(100%) translateY(1rem);
-    pointer-events: none;
-  }
-  .preview-visible {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  
   .blinking-cursor-centered {
     display: inline-block;
     width: 3px;
