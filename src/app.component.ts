@@ -39,7 +39,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   confettiParticles = signal<ConfettiParticle[]>([]);
   showPreview = signal(false);
   showDifficultySelection = signal(false);
-  isTypingAnimationDone = signal(false);
+  typingState = signal<'pre-typing' | 'typing' | 'done'>('pre-typing');
   instructionText = "Unscramble your live camera feed! The image will be broken into tiles and shuffled. Click two tiles to swap them until the picture is correct.";
   instructionChars = this.instructionText.split('');
   charAnimationDelays: number[] = [];
@@ -69,9 +69,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     return parts.join(' and ');
   });
 
-  constructor() {
-    this.prepareTypingAnimation();
-  }
+  constructor() {}
 
   ngAfterViewInit(): void {
     if (this.gameState() === 'idle') {
@@ -90,6 +88,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   }
 
   private prepareTypingAnimation(): void {
+    this.charAnimationDelays = [];
     let delay = 0;
     this.instructionChars.forEach(char => {
       this.charAnimationDelays.push(delay);
@@ -100,7 +99,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     });
     const totalAnimationDuration = delay + 500; // Total time + buffer
     this.typingTimeout = setTimeout(() => {
-      this.isTypingAnimationDone.set(true);
+      this.typingState.set('done');
     }, totalAnimationDuration);
   }
 
@@ -179,10 +178,6 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     this.cameraError.set(null);
     this.confettiParticles.set([]);
     this.showDifficultySelection.set(false);
-    if (this.typingTimeout) {
-      clearTimeout(this.typingTimeout);
-    }
-    this.isTypingAnimationDone.set(false);
     this.gameState.set('idle');
     this.startTypingAnimation();
   }
@@ -195,6 +190,9 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     if (this.previewTimer) {
         clearTimeout(this.previewTimer);
         this.previewTimer = null;
+    }
+    if (this.typingTimeout) {
+      clearTimeout(this.typingTimeout);
     }
     this.showPreview.set(false);
     this.stream?.getTracks().forEach(track => track.stop());
@@ -209,11 +207,15 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   }
 
   private startTypingAnimation(): void {
-    this.isTypingAnimationDone.set(false);
+    this.typingState.set('pre-typing');
     if (this.typingTimeout) {
       clearTimeout(this.typingTimeout);
     }
-    this.prepareTypingAnimation();
+    // Wait for 2 blinks (1.5s for 0.75s blink animation)
+    this.typingTimeout = setTimeout(() => {
+      this.typingState.set('typing');
+      this.prepareTypingAnimation();
+    }, 1500);
   }
   
   toggleDifficultySelection(): void {

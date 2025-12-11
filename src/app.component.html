@@ -9,15 +9,22 @@
 
     @if (gameState() === 'idle') {
       <div class="text-center p-8 bg-slate-800/50 rounded-lg shadow-2xl backdrop-blur-sm border border-slate-700 max-w-lg w-full">
-        <p class="text-slate-300 mb-6 font-mono text-left w-full"
-           style="white-space: pre-wrap; min-height: 100px;"
-           [class.typing-container]="!isTypingAnimationDone()">
-          @for(char of instructionChars; track $index) {
-            <span class="animate-typing" [style.animation-delay.ms]="charAnimationDelays[$index]">{{ char }}</span>
-          }
-        </p>
         
-        <div class="flex flex-col items-center gap-4">
+        <div class="relative font-mono text-left w-full" style="min-height: 100px;">
+            @if (typingState() === 'pre-typing') {
+              <div class="absolute inset-0 flex items-center justify-center">
+                <span class="blinking-cursor-centered"></span>
+              </div>
+            }
+            <p [class.typing-container]="typingState() === 'typing'"
+               [class.opacity-0]="typingState() === 'pre-typing'">
+              @for(char of instructionChars; track $index) {
+                <span class="animate-typing" [style.animation-delay.ms]="charAnimationDelays[$index]">{{ char }}</span>
+              }
+            </p>
+        </div>
+        
+        <div class="flex flex-col items-center gap-4 mt-6">
           <button (click)="startGame(3)" class="w-full sm:w-auto px-8 py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-xl transition-all duration-300 shadow-lg hover:shadow-emerald-500/30 transform hover:scale-105">
             Play
           </button>
@@ -171,16 +178,29 @@
     animation: typing-reveal 0.1s forwards;
   }
   
-  @keyframes blink-caret {
+  @keyframes blink-caret-inline {
     from, to { border-color: transparent }
     50% { border-color: #38bdf8; }
   }
   .typing-container::after {
     content: '▋';
-    animation: blink-caret 0.75s step-end infinite;
+    animation: blink-caret-inline 0.75s step-end infinite;
     margin-left: 2px;
     font-weight: bold;
     color: #38bdf8;
+  }
+
+  .blinking-cursor-centered {
+    display: inline-block;
+    width: 3px;
+    height: 1.2em;
+    background-color: #38bdf8;
+    animation: blink-caret-centered 0.75s step-end infinite;
+  }
+
+  @keyframes blink-caret-centered {
+    from, to { background-color: #38bdf8; }
+    50% { background-color: transparent; }
   }
   
   .difficulty-options {
